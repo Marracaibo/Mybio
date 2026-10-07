@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+.stato.json
+.comandi.json
+.servizio.json
+.rss-visti.json
+sorgenti/
+logs/
+openwa-data/
+node_modules/
+deploy/
+.git/

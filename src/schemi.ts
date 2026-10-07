@@ -28,6 +28,11 @@ export const AdattamentoSchema = z.object({
 });
 export type Adattamento = z.infer<typeof AdattamentoSchema>;
 
+/** Fase 4: una variante riscritta su richiesta. */
+export const RevisioneSchema = z.object({
+  testo: z.string(),
+});
+
 /** Chiamata 3: verifica delle varianti. */
 export const VerificaSchema = z.object({
   traduzione_letterale: z.boolean(),

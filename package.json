@@ -11,6 +11,8 @@
     "rss": "tsx src/rss.ts",
     "adatta": "tsx src/adatta.ts",
     "invia": "tsx src/invia.ts",
+    "servizio": "tsx src/servizio.ts",
+    "webhook": "tsx src/webhook.ts",
     "inizializza": "tsx src/inizializza.ts",
     "gruppi": "tsx src/gruppi.ts",
     "typecheck": "tsc --noEmit"

@@ -25,7 +25,12 @@ export function configOpenWA(config: Config, richiediGruppo = true): ConfigOpenW
   };
 }
 
-async function richiesta(cfg: ConfigOpenWA, metodo: "GET" | "POST", percorso: string, body?: unknown): Promise<unknown> {
+async function richiesta(
+  cfg: ConfigOpenWA,
+  metodo: "GET" | "POST" | "PUT",
+  percorso: string,
+  body?: unknown,
+): Promise<unknown> {
   const url = `${cfg.url}/api/sessions/${encodeURIComponent(cfg.sessione)}${percorso}`;
   let risposta: Response;
   try {
@@ -50,11 +55,49 @@ async function richiesta(cfg: ConfigOpenWA, metodo: "GET" | "POST", percorso: st
   }
 }
 
-/** Invia un messaggio di testo al gruppo configurato. Nessun nuovo tentativo: in caso di errore lancia. */
-export async function inviaTesto(cfg: ConfigOpenWA, testo: string): Promise<void> {
-  await richiesta(cfg, "POST", "/messages/send-text", { chatId: cfg.gruppo, text: testo });
+/**
+ * Invia un messaggio di testo al gruppo configurato e restituisce l'id del messaggio (serve alla Fase 4).
+ * Nessun nuovo tentativo: in caso di errore lancia.
+ */
+export async function inviaTesto(
+  cfg: ConfigOpenWA,
+  testo: string,
+  opzioni: { quotedMessageId?: string } = {},
+): Promise<string | undefined> {
+  const corpo: Record<string, string> = { chatId: cfg.gruppo, text: testo };
+  if (opzioni.quotedMessageId) corpo["quotedMessageId"] = opzioni.quotedMessageId;
+  const risposta = await richiesta(cfg, "POST", "/messages/send-text", corpo);
+  const id = (risposta as { messageId?: unknown } | null)?.messageId;
+  return typeof id === "string" ? id : undefined;
 }
 
 export async function elencaGruppi(cfg: ConfigOpenWA): Promise<unknown> {
   return richiesta(cfg, "GET", "/groups");
+}
+
+/**
+ * Registra (o aggiorna) il webhook che porta al servizio i messaggi del gruppo.
+ * OpenWA filtra già a monte: arrivano solo i messaggi ricevuti nel gruppo configurato.
+ */
+export async function registraWebhook(cfg: ConfigOpenWA, url: string, secret: string): Promise<"creato" | "aggiornato"> {
+  const corpo = {
+    url,
+    events: ["message.received"],
+    secret,
+    filters: { conditions: [{ field: "chatId", operator: "is", value: [cfg.gruppo] }] },
+    retryCount: 3,
+  };
+  const esistenti = await richiesta(cfg, "GET", "/webhooks");
+  const elenco: unknown[] = Array.isArray(esistenti)
+    ? esistenti
+    : esistenti && typeof esistenti === "object" && "data" in esistenti && Array.isArray(esistenti.data)
+      ? esistenti.data
+      : [];
+  const stesso = elenco.find((w) => (w as { url?: unknown })?.url === url) as { id?: unknown } | undefined;
+  if (stesso && typeof stesso.id === "string") {
+    await richiesta(cfg, "PUT", `/webhooks/${encodeURIComponent(stesso.id)}`, { ...corpo, active: true });
+    return "aggiornato";
+  }
+  await richiesta(cfg, "POST", "/webhooks", corpo);
+  return "creato";
 }

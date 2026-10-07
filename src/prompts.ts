@@ -46,8 +46,20 @@ Le linee guida qui sotto descrivono il profilo e il pubblico: usale per giudicar
 ${bloccoLineeGuida(lineeGuida)}`;
 }
 
-/** System prompt della chiamata 2 (adattamento), come da specifica. */
-export function promptAdattamento(config: Config, lineeGuida: string): string {
+const COMPITO_VARIANTI = `Scrivi due varianti (variante_a e variante_b) con la stessa struttura ma hook e angolazione \
+diversi, così chi pubblica può scegliere. Ogni variante è il post completo, pronto da incollare su LinkedIn.`;
+
+const COMPITO_REVISIONE = `Questa volta non scrivi da zero: ricevi una variante già scritta e una richiesta di modifica \
+di chi pubblica (es. "più corto", "cambia hook"). Riscrivi SOLO quella variante applicando la richiesta, \
+senza violare nessuna delle regole sopra (se la richiesta le contraddice, vincono le regole). \
+Restituisci in "testo" il post completo, pronto da incollare su LinkedIn.`;
+
+/** System prompt della chiamata 2 (adattamento), come da specifica; "revisione" per i comandi della Fase 4. */
+export function promptAdattamento(
+  config: Config,
+  lineeGuida: string,
+  compito: "varianti" | "revisione" = "varianti",
+): string {
   return `Sei il ghostwriter di ${config.PROFILO_NOME}, ${config.PROFILO_RUOLO} di Doublegram, suite di strumenti per \
 crescere e gestire community Telegram. Scrivi post LinkedIn in italiano per il suo profilo.
 
@@ -69,8 +81,7 @@ Se il nome dell'autore non è noto, scrivi ${SEGNAPOSTO_AUTORE} al suo posto.
 - Chiudi con una domanda o una CTA morbida che inviti a commentare, mai con "scrivimi in DM per comprare".
 - Massimo ${config.MAX_CARATTERI} caratteri.
 
-Scrivi due varianti (variante_a e variante_b) con la stessa struttura ma hook e angolazione diversi, \
-così chi pubblica può scegliere. Ogni variante è il post completo, pronto da incollare su LinkedIn.
+${compito === "varianti" ? COMPITO_VARIANTI : COMPITO_REVISIONE}
 
 ${bloccoLineeGuida(lineeGuida)}`;
 }

@@ -6,7 +6,7 @@ import { CARTELLE, caricaConfig, verificaSeparazioneCartelle } from "./config.js
 import { creaLogger, descriviErrore } from "./log.js";
 import { configOpenWA, inviaTesto } from "./openwa.js";
 import { caricaStato, salvaStato } from "./stato.js";
-import { oggi, testoSemplice } from "./testo.js";
+import { inizioTesto, oggi, testoSemplice } from "./testo.js";
 
 const log = creaLogger("invia");
 
@@ -99,13 +99,19 @@ async function main(): Promise<number> {
     }
 
     log.info(`Invio ${nome} (${daInviare.length} messaggi)`);
+    const parti = ["contesto", "A", "B"] as const;
     let inviati = giaInviati;
     for (const testo of daInviare) {
+      let id: string | undefined;
       try {
-        await inviaTesto(openwa, testo);
+        id = await inviaTesto(openwa, testo);
       } catch (e) {
         log.errore(`Invio interrotto: ${descriviErrore(e)}. Si riprova al prossimo giro.`);
         return 1;
+      }
+      if (id) {
+        // Fase 4: chi risponde citando questo messaggio sta parlando di questa bozza.
+        stato.messaggi[id] = { bozza: nome, parte: parti[inviati] ?? "contesto", inizio: inizioTesto(testo), data: new Date().toISOString() };
       }
       inviati++;
       stato.messaggiPerGiorno[giorno] = (stato.messaggiPerGiorno[giorno] ?? 0) + 1;

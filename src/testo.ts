@@ -54,3 +54,8 @@ export function haMarkdown(testo: string): boolean {
     /(^|\s)\*[^*\s][^*\n]*?\*(?=\s|[.,;:!?]|$)/m.test(testo)
   );
 }
+
+/** Prime parole di un messaggio, normalizzate: servono a riconoscere una citazione su WhatsApp. */
+export function inizioTesto(testo: string, lunghezza = 120): string {
+  return testo.replace(/\s+/g, " ").trim().slice(0, lunghezza).toLowerCase();
+}

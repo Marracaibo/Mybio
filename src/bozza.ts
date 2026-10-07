@@ -20,7 +20,7 @@ export function descriviFonte(autore?: string, link?: string): string {
 
 export function componiBozza(dati: {
   fonte: string;
-  analisi: Analisi;
+  analisi: Pick<Analisi, "formato" | "perche_funziona">;
   problemi: string[];
   segnaposto: string[];
   sorgente: string;

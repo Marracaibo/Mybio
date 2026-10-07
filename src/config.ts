@@ -9,6 +9,11 @@ export const PROJECT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.u
 
 dotenv.config({ path: path.join(PROJECT_DIR, ".env"), quiet: true });
 
+/** Dove stanno stato, log e copie dei sorgenti: di default il progetto locale (in Docker un volume). */
+export const DATI_DIR = path.resolve(process.env["DATI_DIR"]?.trim() || PROJECT_DIR);
+
+const orario = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "formato HH:MM");
+
 const vuotoComeAssente = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
 
 const EnvSchema = z.object({
@@ -36,6 +41,15 @@ const EnvSchema = z.object({
   INVIA_VARIANTE_B: z.preprocess(vuotoComeAssente, z.enum(["true", "false"]).default("true")),
   RSS_MAX_PER_FEED: z.preprocess(vuotoComeAssente, z.coerce.number().int().positive().default(3)),
   RSS_GIORNI: z.preprocess(vuotoComeAssente, z.coerce.number().int().positive().default(7)),
+  // Fase 4: servizio sempre acceso (webhook di OpenWA + pianificazione interna)
+  PORTA_SERVIZIO: z.preprocess(vuotoComeAssente, z.coerce.number().int().min(1).max(65535).default(3000)),
+  WEBHOOK_URL: z.preprocess(vuotoComeAssente, z.string().url().optional()),
+  OPENWA_WEBHOOK_SECRET: z.preprocess(vuotoComeAssente, z.string().min(16, "almeno 16 caratteri").optional()),
+  COMANDI_MAX_GIORNO: z.preprocess(vuotoComeAssente, z.coerce.number().int().positive().default(20)),
+  PIANIFICAZIONE_INTERNA: z.preprocess(vuotoComeAssente, z.enum(["true", "false"]).default("true")),
+  ORARIO_RSS: z.preprocess(vuotoComeAssente, orario.default("07:00")),
+  ORARIO_ADATTA: z.preprocess(vuotoComeAssente, orario.default("07:30")),
+  ORARIO_INVIA: z.preprocess(vuotoComeAssente, orario.default("08:30")),
 });
 
 export type Config = z.infer<typeof EnvSchema>;
@@ -73,13 +87,13 @@ function contiene(padre: string, figlio: string): boolean {
  * o se nella cartella condivisa compaiono file che non dovrebbero esserci.
  */
 export function verificaSeparazioneCartelle(sharedDir: string): void {
-  if (contiene(sharedDir, PROJECT_DIR) || contiene(PROJECT_DIR, sharedDir)) {
+  if (contiene(sharedDir, PROJECT_DIR) || contiene(PROJECT_DIR, sharedDir) || contiene(sharedDir, DATI_DIR)) {
     throw new Error(
       `SHARED_DIR (${sharedDir}) e la cartella del progetto (${PROJECT_DIR}) non devono essere una dentro l'altra: ` +
         "il file .env e i dati di sessione finirebbero nel cloud.",
     );
   }
-  const vietati = [".env", ".stato.json", ".rss-visti.json", "openwa-data", ".wwebjs_auth"];
+  const vietati = [".env", ".stato.json", ".rss-visti.json", ".comandi.json", "openwa-data", ".wwebjs_auth", "rclone.conf"];
   const trovati = vietati.filter((nome) => fs.existsSync(path.join(sharedDir, nome)));
   if (trovati.length > 0) {
     throw new Error(

@@ -58,6 +58,19 @@ e i file restano in `01-da-adattare/`: verranno elaborati al giro successivo.
 Se OpenWA non risponde scrive l'errore nel log ed esce, senza tentativi a raffica: riprova al giro successivo
 riprendendo dal messaggio a cui si era fermato.
 
+**`npm run servizio`** (Fase 4) – resta sempre acceso e fa due cose:
+
+1. **comandi nel gruppo**: se qualcuno risponde *citando* un messaggio di una bozza con una richiesta come
+   "più corto" o "cambia hook", riscrive quella variante (Sonnet), la ricontrolla, aggiorna il file in `02-bozze/`
+   (o `03-approvati/`) e risponde nel gruppo con l'esito e il testo nuovo. Le risposte ai comandi **non contano**
+   nel limite dei 3 messaggi al giorno; c'è solo un tetto di sicurezza (`COMANDI_MAX_GIORNO`, default 20).
+   Tutto il resto che si scrive nel gruppo viene ignorato;
+2. **pianificazione** (se `PIANIFICAZIONE_INTERNA=true`): lancia `rss`, `adatta` e `invia` agli orari `ORARIO_*`.
+   Se il servizio riparte in ritardo recupera i lavori fino a 3 ore dopo l'orario; oltre, li salta a domani
+   (niente invii a sorpresa nel pomeriggio).
+
+I messaggi arrivano da OpenWA tramite un webhook firmato (`OPENWA_WEBHOOK_SECRET`), registrato con `npm run webhook`.
+
 ### Formato della bozza
 
 ```
@@ -204,6 +217,105 @@ registra nell'Utilità di pianificazione (cartella *Doublegram-LinkedIn*) `rss` 
 tutti i giorni, con l'utente collegato (serve perché Google Drive sia montato). Se il PC era spento all'orario previsto,
 partono appena possibile. Orari diversi: `-OraRss 06:30 -OraAdatta 07:00 -OraInvia 09:00`. Per rimuoverle: `-Rimuovi`.
 
+In alternativa lascia acceso `npm run servizio` con `PIANIFICAZIONE_INTERNA=true`: fa la stessa cosa e in più gestisce
+i comandi nel gruppo. **Usa uno dei due, non entrambi.** Se vuoi i comandi ma preferisci l'Utilità di pianificazione,
+metti `PIANIFICAZIONE_INTERNA=false`.
+
+### Comandi nel gruppo sul PC (Fase 4)
+
+1. Nel `.env`: `OPENWA_WEBHOOK_SECRET` (almeno 16 caratteri casuali) e
+   `WEBHOOK_URL=http://host.docker.internal:3000/webhook/openwa` (OpenWA gira in Docker e raggiunge il PC così).
+2. Nel `.env` di OpenWA aggiungi `SSRF_ALLOWED_HOSTS=host.docker.internal` (altrimenti OpenWA rifiuta di chiamare
+   indirizzi interni) e riavvialo con `docker compose up -d`.
+3. `npm run webhook` per registrare il webhook (si può rilanciare: aggiorna quello esistente).
+4. `npm run servizio` e lascialo aperto. Funziona solo a PC acceso: per averlo sempre attivo vedi **Deploy in cloud**.
+
+---
+
+## Deploy in cloud (funziona anche a PC spento)
+
+Tutto gira su un piccolo server Linux (VPS) con Docker: OpenWA, il motore (`npm run servizio`) e una
+sincronizzazione bidirezionale con la cartella di Google Drive (rclone), così il team continua a lavorare su Drive
+come prima. Basta un VPS da 2 vCPU / 4 GB di RAM (es. Hetzner CX22, pochi euro al mese): OpenWA con
+whatsapp-web.js usa un Chromium che da solo occupa 300–500 MB.
+
+```
+VPS
+├─ OpenWA (compose ufficiale)  ── rete Docker "openwa-network" ──  motore (deploy/docker-compose.yml)
+│    dati di sessione nel volume openwa_openwa-data                   stato e log in deploy/dati/motore
+└─ rclone ⇄ Google Drive (ogni 2 minuti) ──────────────────────────── deploy/dati/condivisa
+```
+
+Segreti e dati di sessione restano sul server (`.env`, `deploy/segreti/`, volumi Docker), mai su Drive.
+Nessuna porta è pubblica: la dashboard di OpenWA si apre con un tunnel SSH.
+
+**1. Server.** Crea il VPS (Ubuntu 24.04), installa Docker (`curl -fsSL https://get.docker.com | sh`) e git.
+
+**2. OpenWA** (dalla home del server):
+
+```bash
+git clone https://github.com/rmyndharis/OpenWA.git && cd OpenWA
+cat > docker-compose.override.yml <<'YAML'
+services:
+  openwa-api:
+    image: ghcr.io/rmyndharis/openwa:latest
+YAML
+cat >> .env <<'ENV'
+ENGINE_TYPE=whatsapp-web.js
+SSRF_ALLOWED_HOSTS=motore
+TZ=Europe/Rome
+ENV
+docker compose pull openwa-api && docker compose up -d --no-build
+docker exec openwa-api cat /app/data/.api-key      # → OPENWA_API_KEY
+```
+
+Dashboard dal tuo PC: `ssh -L 2785:127.0.0.1:2785 utente@server` e poi <http://localhost:2785>.
+Crea la sessione, scansiona il QR con il numero dedicato e annota l'id (→ `OPENWA_SESSION`).
+Se avevi già una sessione sul PC, la ricolleghi semplicemente con un nuovo QR sul server.
+
+**3. Motore:**
+
+```bash
+cd ~ && git clone <url-del-repo> doublegram-linkedin-engine && cd doublegram-linkedin-engine
+cp .env.example .env && nano .env     # chiavi, profilo, OPENWA_*, WHATSAPP_GROUP_ID, OPENWA_WEBHOOK_SECRET
+mkdir -p deploy/dati/condivisa deploy/dati/motore deploy/segreti/rclone
+sudo chown -R 1000:1000 deploy/dati deploy/segreti
+```
+
+`SHARED_DIR`, `OPENWA_URL`, `WEBHOOK_URL` e `PIANIFICAZIONE_INTERNA` nel `.env` vengono ignorati: in cloud li imposta
+`deploy/docker-compose.yml`. Gli orari restano `ORARIO_*` con `TZ=Europe/Rome`.
+
+**4. Google Drive (rclone).** Sul tuo PC Windows installa rclone (`winget install Rclone.Rclone`), lancia
+`rclone config` → nuovo remoto chiamato `gdrive`, tipo *Google Drive*, accesso completo, autorizza dal browser.
+Poi copia il file di configurazione sul server (contiene il token: è un segreto):
+
+```powershell
+scp "$env:APPDATA\rclone\rclone.conf" utente@server:~/doublegram-linkedin-engine/deploy/segreti/rclone/
+```
+
+Sul server: `sudo chown -R 1000:1000 deploy/segreti`. Se la cartella su Drive non si chiama
+`Doublegram-LinkedIn` (nella radice di "Il mio Drive"), imposta `RCLONE_REMOTO=gdrive:percorso/della/cartella`
+in un file `deploy/.env`.
+
+**5. Avvio:**
+
+```bash
+cd deploy
+docker compose up -d --build
+docker compose exec motore node --import tsx src/webhook.ts     # registra il webhook (una volta)
+docker compose logs -f motore                                    # log in diretta
+```
+
+Al primo avvio rclone copia la cartella di Drive sul server (e viceversa). Da lì in poi ogni modifica fatta su Drive
+arriva al motore entro 2 minuti, e bozze, scarti ed errori arrivano su Drive.
+
+Aggiornamenti: `git pull && cd deploy && docker compose up -d --build`. Per OpenWA vedi il suo README
+(`docker compose pull openwa-api && docker compose up -d --no-build`).
+
+> Sul PC, a quel punto, non serve più nulla: niente Utilità di pianificazione e niente OpenWA locale
+> (se li avevi installati, disattivali con `scripts\installa-pianificazione.ps1 -Rimuovi` e `docker compose down`
+> nella cartella di OpenWA, altrimenti i lavori girerebbero due volte).
+
 ---
 
 ## Uso quotidiano
@@ -231,6 +343,22 @@ partono appena possibile. Orari diversi: `-OraRss 06:30 -OraAdatta 07:00 -OraInv
 7. Ogni tanto controlla `_scartati/` e `_errori/`: accanto a ogni file c'è un `.motivo.txt`.
    Per rielaborare un file in errore, rimettilo in `01-da-adattare/`.
 
+**Ritocchi dal telefono (con `npm run servizio` attivo).** Nel gruppo tieni premuto il messaggio della variante →
+*Rispondi* → scrivi cosa cambiare:
+
+| Scrivi | Effetto |
+|---|---|
+| `più corto` / `più lungo` | accorcia o allunga |
+| `cambia hook` | nuovo inizio, stessa struttura |
+| `cambia chiusura` | nuova domanda o CTA finale |
+| `più diretto`, `meno formale`, `senza emoji` | cambia tono o forma |
+| `rifai: <istruzione>` | qualsiasi altra richiesta, in parole tue |
+| `aiuto` | elenco dei comandi |
+
+Si può combinare ("più corto e senza emoji"). Rispondendo al messaggio della Variante B si modifica la B;
+rispondendo al messaggio di contesto si modifica la A, a meno di scrivere "variante B".
+Si può rispondere anche al testo nuovo per altri ritocchi. Il file della bozza viene aggiornato.
+
 I log sono in `logs\AAAA-MM.log`; l'output delle attività pianificate anche in `logs\pianificazione.log`.
 
 ---
@@ -241,10 +369,7 @@ I log sono in `logs\AAAA-MM.log`; l'output delle attività pianificate anche in 
 npm run typecheck   # tsc --noEmit
 ```
 
-Struttura: `src/adatta.ts` e `src/invia.ts` sono i due comandi; `src/prompts.ts` contiene i prompt
-(analisi, adattamento, verifica); `src/schemi.ts` gli schemi zod degli output JSON; `src/claude.ts` la chiamata
-a Claude con output strutturato; `src/openwa.ts` il client OpenWA; `src/rss.ts` e `src/feed.ts` la lettura dei feed (Fase 3).
-
-## Prossime fasi
-
-- **Fase 4**: webhook di OpenWA: risposte nel gruppo come "più corto" o "cambia hook" rigenerano la bozza.
+Struttura: `src/rss.ts`, `src/adatta.ts`, `src/invia.ts` e `src/servizio.ts` sono i comandi;
+`src/pipeline.ts` contiene analisi, varianti, revisione e verifica; `src/prompts.ts` i prompt;
+`src/schemi.ts` gli schemi zod degli output JSON; `src/claude.ts` la chiamata a Claude con output strutturato;
+`src/openwa.ts` il client OpenWA; `src/comandi.ts` i comandi nel gruppo (Fase 4); `src/feed.ts` la lettura dei feed.

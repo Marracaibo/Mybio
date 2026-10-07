@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { PROJECT_DIR } from "./config.js";
+import { DATI_DIR } from "./config.js";
 
-const LOG_DIR = path.join(PROJECT_DIR, "logs");
+const LOG_DIR = path.join(DATI_DIR, "logs");
 
 function scrivi(livello: "INFO" | "AVVISO" | "ERRORE", comando: string, messaggio: string): void {
   const ora = new Date();

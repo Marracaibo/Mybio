@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { percorsoLibero, preparaCartellaCondivisa } from "./cartelle.js";
-import { CARTELLE, caricaConfig, FONTI, PROJECT_DIR, verificaSeparazioneCartelle } from "./config.js";
+import { CARTELLE, caricaConfig, DATI_DIR, FONTI, verificaSeparazioneCartelle } from "./config.js";
 import { leggiFeed, type ElementoFeed } from "./feed.js";
 import { creaLogger, descriviErrore } from "./log.js";
 import { oggi, slug } from "./testo.js";
@@ -9,7 +9,7 @@ import { oggi, slug } from "./testo.js";
 const log = creaLogger("rss");
 
 /** Articoli già importati, per feed. Sta nel progetto locale, mai nella cartella condivisa. */
-const FILE_VISTI = path.join(PROJECT_DIR, ".rss-visti.json");
+const FILE_VISTI = path.join(DATI_DIR, ".rss-visti.json");
 const MAX_ID_PER_FEED = 500;
 
 interface Fonte {

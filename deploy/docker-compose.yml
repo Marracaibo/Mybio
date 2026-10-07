@@ -1,0 +1,47 @@
+# Deploy in cloud (VPS): motore + sincronizzazione di Google Drive.
+# OpenWA gira nel suo compose (vedi README, "Deploy in cloud") sulla rete Docker "openwa-network":
+# il motore lo raggiunge come http://openwa-api:2785 e OpenWA chiama il motore come http://motore:3000.
+#
+# Avvio, dalla cartella deploy/:  docker compose up -d --build
+name: doublegram-linkedin
+
+services:
+  motore:
+    build: ..
+    restart: unless-stopped
+    user: "1000:1000"
+    # Segreti e impostazioni: il file .env del progetto, sul server. MAI nella cartella condivisa.
+    env_file: ../.env
+    environment:
+      SHARED_DIR: /condivisa
+      DATI_DIR: /dati
+      OPENWA_URL: http://openwa-api:2785
+      WEBHOOK_URL: http://motore:3000/webhook/openwa
+      PORTA_SERVIZIO: "3000"
+      PIANIFICAZIONE_INTERNA: "true"
+      TZ: ${TZ:-Europe/Rome}
+    volumes:
+      - ./dati/condivisa:/condivisa
+      - ./dati/motore:/dati
+    networks:
+      - openwa-network
+    # Nessuna porta pubblica: solo OpenWA, sulla rete interna, parla con il motore.
+
+  rclone:
+    image: rclone/rclone:latest
+    restart: unless-stopped
+    user: "1000:1000"
+    entrypoint: ["/bin/sh", "/sync.sh"]
+    environment:
+      RCLONE_CONFIG: /config/rclone/rclone.conf
+      RCLONE_REMOTO: ${RCLONE_REMOTO:-gdrive:Doublegram-LinkedIn}
+      RCLONE_INTERVALLO: ${RCLONE_INTERVALLO:-120}
+    volumes:
+      - ./rclone-sync.sh:/sync.sh:ro
+      # rclone.conf con il token di Google Drive: è un segreto, resta sul server.
+      - ./segreti/rclone:/config/rclone
+      - ./dati/condivisa:/condivisa
+
+networks:
+  openwa-network:
+    external: true

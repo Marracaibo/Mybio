@@ -17,3 +17,12 @@ openwa-data/
 # Node
 node_modules/
 dist/
+
+# Stato del servizio (Fase 4)
+.comandi.json
+.servizio.json
+sorgenti/
+
+# Deploy in cloud: dati e segreti restano sul server
+deploy/dati/
+deploy/segreti/
