@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .stato.json
+.rss-visti.json
 
 # Log
 logs/

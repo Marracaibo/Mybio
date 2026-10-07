@@ -19,13 +19,20 @@ Cartella condivisa (Google Drive)                    Progetto locale (questo rep
 ─────────────────────────────────                    ─────────────────────────────
 01-da-adattare/   ← metti qui i post inglesi         .env          segreti
    _elaborati/    ← i sorgenti già elaborati         .stato.json   cosa è già stato inviato
-02-bozze/         → bozze generate (.md)             logs/         log mensili
-03-approvati/     ← sposti qui quelle scelte         openwa-data/  (se usi una cartella per OpenWA)
-04-pubblicati/    ← archivio dopo la pubblicazione
+02-bozze/         → bozze generate (.md)             .rss-visti.json  articoli RSS già importati
+03-approvati/     ← sposti qui quelle scelte         logs/         log mensili
+04-pubblicati/    ← archivio dopo la pubblicazione   openwa-data/  (se usi una cartella per OpenWA)
 _scartati/        → post fuori target + motivo
 _errori/          → file falliti + motivo
 linee-guida.md    profilo, pubblico, tono, fatti verificati
+fonti.txt         feed RSS delle newsletter (Fase 3)
 ```
+
+**`npm run rss`** – legge i feed RSS/Atom delle newsletter elencati in `fonti.txt` e salva gli articoli nuovi
+in `01-da-adattare/` (file `rss_AAAA-MM-GG_<titolo>.md`, con autore, link e `tipo: newsletter`).
+Prende al massimo `RSS_MAX_PER_FEED` articoli per feed, ignora quelli più vecchi di `RSS_GIORNI` giorni e
+ricorda quelli già importati, quindi non li duplica. I link a LinkedIn in `fonti.txt` vengono rifiutati.
+Un feed che non risponde viene segnalato nel log e gli altri proseguono.
 
 **`npm run adatta`** – per ogni file nuovo in `01-da-adattare/`:
 
@@ -82,7 +89,8 @@ analisi e verifica, che sono compiti semplici di lettura e controllo, li fa un m
 elaborati nello stesso giro costano meno.
 
 Stima indicativa (dipende dalla lunghezza di `linee-guida.md` e dei post): pochi centesimi di dollaro a post,
-circa 1,5–3 $ al mese con un post al giorno. Se la verifica ti sembra troppo permissiva, metti
+circa 1,5–3 $ al mese con un post al giorno. Con la Fase 3 il costo cresce con il numero di articoli importati:
+ogni feed può portare fino a `RSS_MAX_PER_FEED` articoli al giorno, quindi tieni `fonti.txt` corto o abbassa quel valore. Se la verifica ti sembra troppo permissiva, metti
 `CLAUDE_MODEL_CONTROLLI=claude-sonnet-5-5`: con `CLAUDE_EFFORT_CONTROLLI=low` costa di più di Haiku, ma meno del default.
 
 ---
@@ -115,6 +123,8 @@ Nel file `.env`:
 | `OPENWA_URL`, `OPENWA_API_KEY`, `OPENWA_SESSION` | vedi sotto |
 | `WHATSAPP_GROUP_ID` | id del gruppo, formato `120363…@g.us` (vedi sotto) |
 | `INVIA_VARIANTE_B` | `true` / `false` |
+| `RSS_MAX_PER_FEED` | articoli nuovi presi al massimo da ogni feed a ogni giro, default 3 |
+| `RSS_GIORNI` | articoli più vecchi di così vengono ignorati, default 7 |
 
 Poi crea le cartelle e il file di linee guida di esempio:
 
@@ -190,9 +200,9 @@ In PowerShell, dalla cartella del progetto:
 powershell -ExecutionPolicy Bypass -File scripts\installa-pianificazione.ps1
 ```
 
-registra nell'Utilità di pianificazione (cartella *Doublegram-LinkedIn*) `adatta` alle 07:30 e `invia` alle 08:30,
+registra nell'Utilità di pianificazione (cartella *Doublegram-LinkedIn*) `rss` alle 07:00, `adatta` alle 07:30 e `invia` alle 08:30,
 tutti i giorni, con l'utente collegato (serve perché Google Drive sia montato). Se il PC era spento all'orario previsto,
-partono appena possibile. Orari diversi: `-OraAdatta 07:00 -OraInvia 09:00`. Per rimuoverle: `-Rimuovi`.
+partono appena possibile. Orari diversi: `-OraRss 06:30 -OraAdatta 07:00 -OraInvia 09:00`. Per rimuoverle: `-Rimuovi`.
 
 ---
 
@@ -209,6 +219,9 @@ partono appena possibile. Orari diversi: `-OraAdatta 07:00 -OraInvia 09:00`. Per
      ```
 
    - oppure uno screenshot `.png`, `.jpg` o `.webp` del post (massimo 5 MB).
+
+   In più, alle 07:00 `rss` aggiunge da solo gli articoli nuovi delle newsletter elencate in `fonti.txt`
+   (un feed per riga, facoltativo un nome davanti: `Justin Welsh | https://….substack.com/feed`).
 2. Alle 07:30 `adatta` crea le bozze in `02-bozze/`. Puoi anche lanciarlo a mano: `npm run adatta`.
 3. Alle 08:30 arriva nel gruppo WhatsApp la bozza più vecchia non ancora inviata.
 4. Leggi il messaggio di contesto: se ci sono **problemi di verifica** o **segnaposto** (`[DATO DA INSERIRE]`,
@@ -230,9 +243,8 @@ npm run typecheck   # tsc --noEmit
 
 Struttura: `src/adatta.ts` e `src/invia.ts` sono i due comandi; `src/prompts.ts` contiene i prompt
 (analisi, adattamento, verifica); `src/schemi.ts` gli schemi zod degli output JSON; `src/claude.ts` la chiamata
-a Claude con output strutturato; `src/openwa.ts` il client OpenWA.
+a Claude con output strutturato; `src/openwa.ts` il client OpenWA; `src/rss.ts` e `src/feed.ts` la lettura dei feed (Fase 3).
 
 ## Prossime fasi
 
-- **Fase 3**: lettura dei feed RSS delle newsletter elencate in `fonti.txt`, che salva i post nuovi in `01-da-adattare/`.
 - **Fase 4**: webhook di OpenWA: risposte nel gruppo come "più corto" o "cambia hook" rigenerano la bozza.

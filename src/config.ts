@@ -34,6 +34,8 @@ const EnvSchema = z.object({
   OPENWA_SESSION: z.preprocess(vuotoComeAssente, z.string().optional()),
   WHATSAPP_GROUP_ID: z.preprocess(vuotoComeAssente, z.string().optional()),
   INVIA_VARIANTE_B: z.preprocess(vuotoComeAssente, z.enum(["true", "false"]).default("true")),
+  RSS_MAX_PER_FEED: z.preprocess(vuotoComeAssente, z.coerce.number().int().positive().default(3)),
+  RSS_GIORNI: z.preprocess(vuotoComeAssente, z.coerce.number().int().positive().default(7)),
 });
 
 export type Config = z.infer<typeof EnvSchema>;
@@ -58,6 +60,7 @@ export const CARTELLE = {
 } as const;
 
 export const LINEE_GUIDA = "linee-guida.md";
+export const FONTI = "fonti.txt";
 
 function contiene(padre: string, figlio: string): boolean {
   const rel = path.relative(path.resolve(padre), path.resolve(figlio));
@@ -76,7 +79,7 @@ export function verificaSeparazioneCartelle(sharedDir: string): void {
         "il file .env e i dati di sessione finirebbero nel cloud.",
     );
   }
-  const vietati = [".env", ".stato.json", "openwa-data", ".wwebjs_auth"];
+  const vietati = [".env", ".stato.json", ".rss-visti.json", "openwa-data", ".wwebjs_auth"];
   const trovati = vietati.filter((nome) => fs.existsSync(path.join(sharedDir, nome)));
   if (trovati.length > 0) {
     throw new Error(

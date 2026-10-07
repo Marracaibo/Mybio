@@ -10,6 +10,8 @@ export interface PostSorgente {
   testo: string;
   autore?: string;
   link?: string;
+  /** "newsletter" per gli articoli importati dai feed RSS; assente per i post LinkedIn. */
+  tipo?: string;
 }
 
 const ESTENSIONI_TESTO = new Set([".txt", ".md"]);
@@ -33,24 +35,26 @@ const URL_DA_SOLO = /^\s*<?(https?:\/\/\S+?)>?\s*$/;
  *
  *   autore: Justin Welsh
  *   link: https://www.linkedin.com/posts/...
+ *   tipo: newsletter        (scritto da npm run rss)
  *   ---
  *   testo del post…
  */
 export function leggiTestoSorgente(contenuto: string): PostSorgente {
   const righe = contenuto.replace(/^﻿/, "").split(/\r?\n/);
-  const meta: { autore?: string; link?: string } = {};
+  const meta: { autore?: string; link?: string; tipo?: string } = {};
   let i = 0;
   const frontmatter = righe[0]?.trim() === "---";
   if (frontmatter) i = 1;
 
   for (; i < righe.length; i++) {
     const riga = righe[i] ?? "";
-    const m = /^\s*(autore|author|link|url|fonte|source)\s*:\s*(.*)$/i.exec(riga);
+    const m = /^\s*(autore|author|link|url|fonte|source|tipo)\s*:\s*(.*)$/i.exec(riga);
     if (m) {
       const chiave = (m[1] ?? "").toLowerCase();
       const valore = (m[2] ?? "").trim();
       if (!valore) continue;
-      if (chiave === "link" || chiave === "url" || /^https?:\/\//i.test(valore)) meta.link = valore;
+      if (chiave === "tipo") meta.tipo = valore.toLowerCase();
+      else if (chiave === "link" || chiave === "url" || /^https?:\/\//i.test(valore)) meta.link = valore;
       else meta.autore = valore;
       continue;
     }

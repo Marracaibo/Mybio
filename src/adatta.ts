@@ -30,14 +30,15 @@ interface Contesto {
 }
 
 function descriviPost(post: PostSorgente): string {
-  return [
-    `Autore: ${post.autore ?? "non indicato"}`,
-    `Link: ${post.link ?? "non indicato"}`,
-    "",
-    "--- POST ORIGINALE (inglese) ---",
-    post.testo,
-    "--- FINE POST ORIGINALE ---",
-  ].join("\n");
+  const righe = [`Autore: ${post.autore ?? "non indicato"}`, `Link: ${post.link ?? "non indicato"}`];
+  if (post.tipo === "newsletter") {
+    righe.push(
+      "Tipo: articolo di newsletter, non un post LinkedIn. Valuta e riusa l'idea centrale e, se c'è, " +
+        "la struttura (hook, sequenza, chiusura); il risultato deve comunque essere un post LinkedIn.",
+    );
+  }
+  righe.push("", "--- POST ORIGINALE (inglese) ---", post.testo, "--- FINE POST ORIGINALE ---");
+  return righe.join("\n");
 }
 
 async function analizza(ctx: Contesto, post: PostSorgente): Promise<Analisi> {

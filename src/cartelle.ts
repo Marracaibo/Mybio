@@ -1,14 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
-import { CARTELLE, LINEE_GUIDA, PROJECT_DIR } from "./config.js";
+import { CARTELLE, FONTI, LINEE_GUIDA, PROJECT_DIR } from "./config.js";
 
-/** Crea la struttura della cartella condivisa e copia il modello di linee-guida.md se manca. */
+/** Crea la struttura della cartella condivisa e copia i modelli di linee-guida.md e fonti.txt se mancano. */
 export function preparaCartellaCondivisa(sharedDir: string): { lineeGuidaCreate: boolean } {
   if (!fs.existsSync(sharedDir)) {
     throw new Error(`La cartella condivisa non esiste: ${sharedDir} (controlla SHARED_DIR nel file .env)`);
   }
   for (const rel of Object.values(CARTELLE)) {
     fs.mkdirSync(path.join(sharedDir, rel), { recursive: true });
+  }
+  const fonti = path.join(sharedDir, FONTI);
+  if (!fs.existsSync(fonti)) {
+    fs.copyFileSync(path.join(PROJECT_DIR, "modello-cartella-condivisa", FONTI), fonti);
   }
   const lineeGuida = path.join(sharedDir, LINEE_GUIDA);
   if (!fs.existsSync(lineeGuida)) {

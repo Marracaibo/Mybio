@@ -1,14 +1,15 @@
 ﻿<#
 .SYNOPSIS
-  Registra nell'Utilità di pianificazione di Windows i due comandi giornalieri:
-  "npm run adatta" (default 07:30) e "npm run invia" (default 08:30).
+  Registra nell'Utilità di pianificazione di Windows i comandi giornalieri:
+  "npm run rss" (default 07:00), "npm run adatta" (default 07:30) e "npm run invia" (default 08:30).
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\installa-pianificazione.ps1
-  powershell -ExecutionPolicy Bypass -File scripts\installa-pianificazione.ps1 -OraAdatta 07:00 -OraInvia 09:00
+  powershell -ExecutionPolicy Bypass -File scripts\installa-pianificazione.ps1 -OraRss 06:30 -OraAdatta 07:00 -OraInvia 09:00
   powershell -ExecutionPolicy Bypass -File scripts\installa-pianificazione.ps1 -Rimuovi
 #>
 param(
+    [string]$OraRss = "07:00",
     [string]$OraAdatta = "07:30",
     [string]$OraInvia = "08:30",
     [switch]$Rimuovi
@@ -19,6 +20,7 @@ $ErrorActionPreference = "Stop"
 $Cartella = "\Doublegram-LinkedIn\"
 $Progetto = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Attivita = @(
+    @{ Nome = "doublegram-linkedin-rss";    Comando = "rss";    Ora = $OraRss },
     @{ Nome = "doublegram-linkedin-adatta"; Comando = "adatta"; Ora = $OraAdatta },
     @{ Nome = "doublegram-linkedin-invia";  Comando = "invia";  Ora = $OraInvia }
 )

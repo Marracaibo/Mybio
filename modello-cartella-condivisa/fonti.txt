@@ -1,0 +1,13 @@
+# Feed RSS delle newsletter da cui prendere i post (Fase 3, comando: npm run rss).
+# Un feed per riga. Facoltativo: un nome prima del link, separato da |
+# Le righe che iniziano con # sono commenti.
+#
+# Esempi di indirizzi dei feed:
+#   Substack:  https://<nome>.substack.com/feed
+#   beehiiv:   https://rss.beehiiv.com/feeds/<id>.xml
+#   Ghost:     https://<sito>/rss/
+#
+# Vietati: link a linkedin.com (il sistema non legge LinkedIn in automatico).
+#
+# Esempio:
+# Nome Autore | https://esempio.substack.com/feed

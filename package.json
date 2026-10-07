@@ -8,6 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "rss": "tsx src/rss.ts",
     "adatta": "tsx src/adatta.ts",
     "invia": "tsx src/invia.ts",
     "inizializza": "tsx src/inizializza.ts",
