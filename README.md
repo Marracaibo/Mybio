@@ -7,7 +7,8 @@ Un umano la legge, la copia e la pubblica a mano su LinkedIn.
 Cosa il sistema **non** fa, per scelta:
 
 - nessuna interazione automatica con LinkedIn: niente scraping, API, pubblicazione, like, commenti o connessioni;
-- non inventa numeri, clienti, risultati o funzionalità: usa solo `linee-guida.md`, altrimenti scrive `[DATO DA INSERIRE]`;
+- non inventa numeri, clienti, risultati o funzionalità: usa solo `linee-guida.md`, altrimenti scrive `[DATO DA INSERIRE]`
+  (i dati di terzi presenti nel post originale si possono riportare solo citandone la fonte nel testo);
 - non scrive su WhatsApp a nessuno tranne il gruppo configurato, e mai più di 3 messaggi al giorno.
 
 ---
@@ -40,9 +41,10 @@ Un feed che non risponde viene segnalato nel log e gli altri proseguono.
 2. **analisi**: formato, hook, struttura, CTA, perché funziona, se l'idea è originale dell'autore, e se il post è adatto al profilo;
    i post fuori target (storie da founder, vita privata, temi fuori tema) finiscono in `_scartati/` con il motivo;
 3. **adattamento**: due varianti italiane con la stessa struttura e contenuto nuovo;
-4. **verifica**: niente frasi tradotte, nessun dato fuori dalle linee guida, citazione dell'autore se serve,
-   più controlli automatici su lunghezza, emoji e markdown. Se non passa, rigenera **una** volta e poi salva comunque,
-   con i problemi in evidenza;
+4. **verifica**: niente frasi tradotte parola per parola, nessun dato fuori dalle linee guida o non attribuito alla
+   sua fonte, niente esperienze in prima persona inventate, citazione dell'autore se serve, più controlli automatici
+   su lunghezza, emoji, markdown e numero di menzioni di Doublegram. Se non passa, rigenera **una** volta e poi
+   salva comunque, con i problemi in evidenza;
 5. scrive `02-bozze/AAAA-MM-GG_<slug>.md` e sposta il sorgente in `01-da-adattare/_elaborati/`.
 
 Un file che fallisce va in `_errori/` con un `.motivo.txt` accanto e la coda prosegue.
@@ -96,15 +98,16 @@ La riga `segnaposto` compare solo se nel testo ci sono `[DATO DA INSERIRE]` o `[
 
 ## Costi
 
-Il testo da pubblicare lo scrive il modello più capace (`CLAUDE_MODEL`, Sonnet 5.5); trascrizione,
-analisi e verifica, che sono compiti semplici di lettura e controllo, li fa un modello economico
-(`CLAUDE_MODEL_CONTROLLI`, Haiku 4.5). Il system prompt con le linee guida è in cache, quindi più file
-elaborati nello stesso giro costano meno.
+Il testo da pubblicare lo scrive il modello più capace (`CLAUDE_MODEL`, Sonnet 5.5); trascrizione e
+analisi, che sono compiti semplici di lettura, li fa un modello economico (`CLAUDE_MODEL_CONTROLLI`, Haiku 4.5).
+La verifica delle bozze la fa Sonnet 5.5 con poco ragionamento (`CLAUDE_MODEL_VERIFICA`, `CLAUDE_EFFORT_CONTROLLI=low`):
+nelle prove con post e articoli veri Haiku dava esiti diversi sulla stessa bozza e segnalava problemi inesistenti.
+Il system prompt con le linee guida è in cache, quindi più file elaborati nello stesso giro costano meno.
 
 Stima indicativa (dipende dalla lunghezza di `linee-guida.md` e dei post): pochi centesimi di dollaro a post,
 circa 1,5–3 $ al mese con un post al giorno. Con la Fase 3 il costo cresce con il numero di articoli importati:
-ogni feed può portare fino a `RSS_MAX_PER_FEED` articoli al giorno, quindi tieni `fonti.txt` corto o abbassa quel valore. Se la verifica ti sembra troppo permissiva, metti
-`CLAUDE_MODEL_CONTROLLI=claude-sonnet-5-5`: con `CLAUDE_EFFORT_CONTROLLI=low` costa di più di Haiku, ma meno del default.
+ogni feed può portare fino a `RSS_MAX_PER_FEED` articoli al giorno, quindi tieni `fonti.txt` corto o abbassa quel valore.
+Per risparmiare si può mettere `CLAUDE_MODEL_VERIFICA=claude-haiku-4-5`, ma la verifica diventa poco affidabile.
 
 ---
 
@@ -127,8 +130,9 @@ Nel file `.env`:
 |---|---|
 | `ANTHROPIC_API_KEY` | chiave API di Anthropic |
 | `CLAUDE_MODEL` | modello che scrive le varianti, default `claude-sonnet-5-5` |
-| `CLAUDE_MODEL_CONTROLLI` | modello economico per trascrizione, analisi e verifica, default `claude-haiku-4-5` |
-| `CLAUDE_EFFORT_CONTROLLI` | ragionamento per i controlli (`low`, `medium`, `high`), default `low`; ignorato da Haiku 4.5 |
+| `CLAUDE_MODEL_CONTROLLI` | modello economico per trascrizione e analisi, default `claude-haiku-4-5` |
+| `CLAUDE_MODEL_VERIFICA` | modello che controlla le bozze, default `claude-sonnet-5-5` |
+| `CLAUDE_EFFORT_CONTROLLI` | ragionamento per analisi e verifica (`low`, `medium`, `high`), default `low`; ignorato da Haiku 4.5 |
 | `CLAUDE_FALLBACK` | `default` (consigliato): se il modello rifiuta una richiesta, Anthropic la riprova su un modello alternativo (solo sui modelli che lo supportano, es. Sonnet 5.5). `off` per disattivarlo |
 | `SHARED_DIR` | cartella condivisa, es. `G:\Il mio Drive\Doublegram-LinkedIn` |
 | `PROFILO_NOME`, `PROFILO_RUOLO`, `PROFILO_PUBBLICO` | chi firma i post e per chi scrive (entrano nel prompt) |
