@@ -1,37 +1,37 @@
-# Linee guida – profilo LinkedIn sales di Doublegram
+# Linee guida – profilo LinkedIn di Roberto Rainoni (Doublegram)
 
 Questo file viene letto a ogni esecuzione di `npm run adatta` ed è l'UNICA fonte di fatti
 che il sistema può usare. Tutto ciò che non è scritto qui non può comparire in un post:
 al suo posto il sistema scrive [DATO DA INSERIRE].
 
-Compila le parti tra {{ }} e cancella le istruzioni in corsivo quando hai finito.
-
 ---
 
 ## 1. Chi è il profilo
 
-- Nome e cognome: {{Nome Cognome}}
-- Ruolo: {{Sales / Partnership @ Doublegram}}
-- Da quanto lavora con le community Telegram: {{es. dal 2023}}
-- Cosa fa ogni giorno: {{es. parla con admin di community crypto e creator, li aiuta a scegliere gli strumenti per crescita e moderazione}}
-- Esperienze che può raccontare in prima persona: {{es. call con admin, problemi ricorrenti visti nelle community, domande frequenti}}
+- Nome e cognome: Roberto Rainoni
+- Ruolo: Sales Manager di Doublegram
+- Cosa fa ogni giorno: è il Sales Manager di Doublegram; parla con admin e owner di community Telegram
+  che valutano strumenti per gestire e far crescere la propria community.
+- Esperienze che può raccontare in prima persona: le conversazioni commerciali con admin e owner di community
+  Telegram, le domande e i problemi che emergono in quelle conversazioni. Nessun episodio specifico, numero
+  o nome di cliente se non è scritto in questo file.
 
 _Non è il profilo di un fondatore: niente storie da founder, raccolte fondi, vita privata._
 
 ## 2. Pubblico
 
-- {{Admin e owner di community Telegram}}
-- {{Progetti crypto e Web3}}
-- {{Creator che monetizzano su Telegram}}
-- {{Aziende che usano Telegram per il supporto clienti}}
+- Admin e owner di community Telegram
+- Progetti crypto e Web3
+- Creator che monetizzano su Telegram
+- Aziende che usano Telegram per il supporto clienti
 
 Problemi che hanno (da cui partire per i post):
-- {{crescita: trovare nuovi membri reali}}
-- {{spam, bot e raid nei gruppi}}
-- {{engagement che cala dopo il lancio}}
-- {{moderazione che richiede troppo tempo}}
-- {{monetizzazione: abbonamenti, contenuti a pagamento, shop}}
-- {{supporto clienti su Telegram che non scala}}
+- crescita: trovare nuovi membri reali
+- spam, bot e raid nei gruppi
+- engagement che cala dopo il lancio
+- moderazione che richiede troppo tempo
+- monetizzazione: abbonamenti, contenuti a pagamento, shop
+- supporto clienti su Telegram che non scala
 
 ## 3. Tono
 
@@ -43,25 +43,10 @@ Problemi che hanno (da cui partire per i post):
 
 ## 4. Fatti verificati su Doublegram
 
-_Scrivi solo fatti verificati. Il sistema non userà nient'altro._
+- Doublegram automatizza il lavoro ripetitivo, così puoi concentrarti sulla tua community.
 
-Prodotti (nome – cosa fa, in una riga):
-- Grow – {{descrizione}}
-- Captcha – {{descrizione}}
-- AI – {{descrizione}}
-- Lookup – {{descrizione}}
-- Scribe – {{descrizione}}
-- Shop – {{descrizione}}
-- Helpdesk – {{descrizione}}
-
-Numeri verificati (con fonte e data):
-- {{es. N community attive al MM/AAAA – fonte: dashboard interna}}
-- {{…}}
-
-Clienti o casi citabili (solo con autorizzazione):
-- {{nome – cosa hanno ottenuto – autorizzazione: sì/no}}
-
-Sito / link da usare: {{https://…}}
+Non ci sono ancora altri fatti verificati (prodotti e cosa fanno, numeri, clienti citabili, sito):
+finché non vengono aggiunti qui, il sistema non li usa e scrive [DATO DA INSERIRE].
 
 ## 5. Cose da NON dire
 
@@ -70,14 +55,8 @@ Sito / link da usare: {{https://…}}
 - Non dare consigli finanziari o di investimento su crypto e token.
 - Non parlare male di concorrenti per nome.
 - Non chiudere con "scrivimi in DM per comprare" o simili.
-- {{altro}}
 
 ## 6. Esempi di post approvati
 
-_Incolla qui 2-3 post già pubblicati o approvati: servono come riferimento di tono e lunghezza._
-
-### Esempio 1
-{{testo del post}}
-
-### Esempio 2
-{{testo del post}}
+Ancora nessuno. Quando Roberto avrà pubblicato o approvato 2-3 post, incollali qui:
+servono come riferimento di tono e lunghezza.

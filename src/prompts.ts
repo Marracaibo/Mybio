@@ -8,7 +8,8 @@ function bloccoLineeGuida(lineeGuida: string): string {
 export function promptTrascrizione(): string {
   return `Ricevi lo screenshot di un post LinkedIn. Trascrivi fedelmente il testo del post, parola per parola, \
 mantenendo gli a capo, gli elenchi e le emoji. Non tradurre e non riassumere.
-Escludi l'interfaccia di LinkedIn (pulsanti, contatori di reazioni, commenti, "...altro", "Segui").
+Escludi l'interfaccia di LinkedIn, anche in inglese (pulsanti, contatori di reazioni, commenti e condivisioni, \
+"...altro"/"...see more", "Segui"/"Follow", "Mi piace"/"Like").
 Se il nome dell'autore è visibile, riportalo in "autore".
 Se l'immagine non contiene un post leggibile, imposta "leggibile" a false e lascia "testo" vuoto.`;
 }

@@ -13,7 +13,7 @@ const log = creaLogger("invia");
 /** Regola 7: mai più di 3 messaggi al giorno. */
 const MASSIMO_MESSAGGI_GIORNO = 3;
 
-function messaggioContesto(nomeFile: string, bozza: Bozza): string {
+function messaggioContesto(nomeFile: string, bozza: Bozza, conVarianteB: boolean): string {
   const righe = [
     `📝 Nuova bozza LinkedIn: ${nomeFile}`,
     "",
@@ -30,7 +30,12 @@ function messaggioContesto(nomeFile: string, bozza: Bozza): string {
   if (bozza.segnaposto.length > 0) {
     righe.push("", "Da completare prima di pubblicare:", ...bozza.segnaposto.map((s) => `- ${s}`));
   }
-  righe.push("", "Nel prossimo messaggio il post pronto da copiare su LinkedIn.");
+  righe.push(
+    "",
+    conVarianteB
+      ? "Nei prossimi due messaggi la Variante A e poi la Variante B, pronte da copiare su LinkedIn."
+      : "Nel prossimo messaggio il post pronto da copiare su LinkedIn.",
+  );
   return righe.join("\n");
 }
 
@@ -81,8 +86,8 @@ async function main(): Promise<number> {
       continue;
     }
 
-    const messaggi = [messaggioContesto(nome, bozza), testoSemplice(bozza.varianteA)];
     const conVarianteB = config.INVIA_VARIANTE_B === "true" && bozza.varianteB.trim() !== "";
+    const messaggi = [messaggioContesto(nome, bozza, conVarianteB), testoSemplice(bozza.varianteA)];
     if (conVarianteB) messaggi.push(testoSemplice(bozza.varianteB));
 
     const giaInviati = stato.bozze[nome]?.messaggiInviati ?? 0;

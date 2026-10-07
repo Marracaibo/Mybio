@@ -1,13 +1,20 @@
 # Feed RSS delle newsletter da cui prendere i post (Fase 3, comando: npm run rss).
 # Un feed per riga. Facoltativo: un nome prima del link, separato da |
 # Le righe che iniziano con # sono commenti.
-#
-# Esempi di indirizzi dei feed:
-#   Substack:  https://<nome>.substack.com/feed
-#   beehiiv:   https://rss.beehiiv.com/feeds/<id>.xml
-#   Ghost:     https://<sito>/rss/
-#
 # Vietati: link a linkedin.com (il sistema non legge LinkedIn in automatico).
-#
-# Esempio:
-# Nome Autore | https://esempio.substack.com/feed
+
+# Telegram: gruppi, canali, abbonamenti e community a pagamento
+InviteMember | https://blog.invitemember.com/feed/
+
+# Costruire e gestire community
+David Spinks | https://davidspinks.substack.com/feed
+Carrie Melissa Jones | https://www.carriemelissajones.com/blog?format=rss
+
+# Creator: crescita del pubblico e monetizzazione
+Jay Clouse - Creator Science | https://creatorscience.com/feed/
+
+# Vendita B2B pratica
+Close | https://www.close.com/blog/rss.xml
+
+# Moderazione e trust & safety (più politica che pratica: togli il # se vuoi provarla)
+# Everything in Moderation | https://www.everythinginmoderation.co/rss/
