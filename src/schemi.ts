@@ -39,6 +39,13 @@ export const VerificaSchema = z.object({
   numeri_non_verificati: z.array(z.string()),
   citazione_mancante: z.boolean(),
   ok: z.boolean(),
-  problemi: z.array(z.string()),
+  problemi: z.array(
+    z.object({
+      testo: z.string().describe('Es. \'Variante B: "frase esatta" – cosa non va\''),
+      da_correggere: z
+        .boolean()
+        .describe("false se, a ben vedere, non è un difetto da correggere: la segnalazione verrà scartata"),
+    }),
+  ),
 });
 export type Verifica = z.infer<typeof VerificaSchema>;

@@ -25,10 +25,18 @@ export function creaClient(config: Config): Anthropic {
 /**
  * Quale modello usa una chiamata:
  * - "scrittura": l'adattamento, cioè il testo che verrà pubblicato (CLAUDE_MODEL);
- * - "controllo": trascrizione, analisi e verifica, compiti semplici affidati a un modello economico
- *   (CLAUDE_MODEL_CONTROLLI) con poco ragionamento (CLAUDE_EFFORT_CONTROLLI).
+ * - "controllo": trascrizione e analisi, compiti semplici affidati a un modello economico
+ *   (CLAUDE_MODEL_CONTROLLI) con poco ragionamento (CLAUDE_EFFORT_CONTROLLI);
+ * - "verifica": il controllo delle bozze (CLAUDE_MODEL_VERIFICA), con lo stesso ragionamento dei controlli.
+ *   Ha un modello a parte perché un modello economico qui dà risultati incostanti e molti falsi allarmi.
  */
-export type Ruolo = "scrittura" | "controllo";
+export type Ruolo = "scrittura" | "controllo" | "verifica";
+
+const MODELLO: Record<Ruolo, (c: Config) => string> = {
+  scrittura: (c) => c.CLAUDE_MODEL,
+  controllo: (c) => c.CLAUDE_MODEL_CONTROLLI,
+  verifica: (c) => c.CLAUDE_MODEL_VERIFICA,
+};
 
 /** Modelli che accettano `output_config.effort` (Haiku 4.5 e Sonnet 4.5 lo rifiutano con un 400). */
 const SUPPORTA_EFFORT = /^claude-(fable|mythos|opus-(4-[5-9]|5)|sonnet-(4-6|5))/;
@@ -44,9 +52,9 @@ export async function chiediJson<S extends z.ZodType>(
   config: Config,
   opzioni: { nome: string; ruolo: Ruolo; system: string; contenuto: Contenuto; schema: S },
 ): Promise<z.infer<S>> {
-  const modello = opzioni.ruolo === "scrittura" ? config.CLAUDE_MODEL : config.CLAUDE_MODEL_CONTROLLI;
+  const modello = MODELLO[opzioni.ruolo](config);
   const effort =
-    opzioni.ruolo === "controllo" && SUPPORTA_EFFORT.test(modello) ? { effort: config.CLAUDE_EFFORT_CONTROLLI } : {};
+    opzioni.ruolo !== "scrittura" && SUPPORTA_EFFORT.test(modello) ? { effort: config.CLAUDE_EFFORT_CONTROLLI } : {};
   const fallback =
     config.CLAUDE_FALLBACK === "default" && SUPPORTA_FALLBACK.test(modello)
       ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }

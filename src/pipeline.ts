@@ -155,12 +155,15 @@ export function controlliLocali(config: Config, varianti: Adattamento): string[]
   return problemi;
 }
 
-function elencoProblemi(verifica: Verifica, locali: string[]): string[] {
-  const problemi = [...verifica.problemi];
+function elencoProblemi(verifica: Verifica, locali: string[], varianti: Adattamento): string[] {
+  // Il modello a volte elenca anche osservazioni che lui stesso giudica accettabili: restano fuori.
+  const problemi = verifica.problemi.filter((p) => p.da_correggere).map((p) => p.testo);
   if (verifica.traduzione_letterale && !problemi.some((p) => /trad[ou]/i.test(p))) {
     problemi.push("Contiene frasi tradotte dall'originale");
   }
-  for (const n of verifica.numeri_non_verificati) {
+  // Il modello a volte riporta numeri dell'originale che nelle varianti non ci sono: si tengono solo quelli presenti.
+  const testi = varianti.variante_a + "\n" + varianti.variante_b;
+  for (const n of verifica.numeri_non_verificati.filter((n) => n.trim() && testi.includes(n.trim()))) {
     if (!problemi.some((p) => p.includes(n))) problemi.push(`Dato non presente nelle linee guida: ${n}`);
   }
   if (verifica.citazione_mancante && !problemi.some((p) => /cit/i.test(p))) {
@@ -192,12 +195,12 @@ export async function verifica(
   ].join("\n");
   const esito = await chiediJson(ctx.client, ctx.config, {
     nome: "verifica",
-    ruolo: "controllo",
+    ruolo: "verifica",
     system: promptVerifica(ctx.config, ctx.lineeGuida),
     schema: VerificaSchema,
     contenuto: [{ type: "text", text: testo }],
   });
-  return elencoProblemi(esito, locali);
+  return elencoProblemi(esito, locali, varianti);
 }
 
 export function segnaposto(varianti: Adattamento): string[] {
