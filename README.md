@@ -138,6 +138,7 @@ Nel file `.env`:
 | `INVIA_VARIANTE_B` | `true` / `false` |
 | `RSS_MAX_PER_FEED` | articoli nuovi presi al massimo da ogni feed a ogni giro, default 3 |
 | `RSS_GIORNI` | articoli più vecchi di così vengono ignorati, default 7 |
+| `RSS_MAX_CARATTERI` | articoli più lunghi vengono tagliati (con avviso), default 20000 |
 
 Poi crea le cartelle e il file di linee guida di esempio:
 

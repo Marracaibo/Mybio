@@ -72,10 +72,16 @@ async function scarica(url: URL): Promise<string> {
   return risposta.text();
 }
 
-function contenutoFile(fonte: Fonte, titoloFeed: string, e: ElementoFeed): string {
+function contenutoFile(fonte: Fonte, titoloFeed: string, e: ElementoFeed, maxCaratteri: number): string {
   const righe = [`autore: ${fonte.nome ?? e.autore ?? titoloFeed ?? ""}`.trim()];
   if (e.link) righe.push(`link: ${e.link}`);
-  righe.push("tipo: newsletter", "---", e.titolo, "", e.testo, "");
+  // Articoli lunghissimi (trascrizioni di podcast, report) costano molto e non servono interi per un post:
+  // si tagliano in modo esplicito, mai in silenzio.
+  const testo =
+    e.testo.length > maxCaratteri
+      ? `${e.testo.slice(0, maxCaratteri).trimEnd()}\n\n[… articolo troncato: ${e.testo.length} caratteri in tutto, tenuti i primi ${maxCaratteri} …]`
+      : e.testo;
+  righe.push("tipo: newsletter", "---", e.titolo, "", testo, "");
   return righe.join("\n");
 }
 
@@ -114,9 +120,10 @@ async function main(): Promise<number> {
         if (e.testo.trim()) {
           const nome = `rss_${oggi()}_${slug(`${fonte.nome ?? ""} ${e.titolo}`)}.md`;
           const destinazione = percorsoLibero(cartellaInput, nome);
-          fs.writeFileSync(destinazione, contenutoFile(fonte, feed.titolo, e), "utf8");
+          fs.writeFileSync(destinazione, contenutoFile(fonte, feed.titolo, e, config.RSS_MAX_CARATTERI), "utf8");
           totale++;
-          log.info(`Nuovo da ${etichetta}: ${path.basename(destinazione)}`);
+          const taglio = e.testo.length > config.RSS_MAX_CARATTERI ? ` (troncato da ${e.testo.length} caratteri)` : "";
+          log.info(`Nuovo da ${etichetta}: ${path.basename(destinazione)}${taglio}`);
         } else {
           log.avviso(`Articolo senza testo nel feed, saltato: ${e.titolo || e.id}`);
         }

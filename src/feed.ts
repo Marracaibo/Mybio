@@ -37,6 +37,24 @@ function senzaCdata(s: string): string {
   return s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
 }
 
+/** Righe di servizio delle piattaforme di newsletter (pulsanti, inviti): rumore per l'adattamento. */
+const RIGHE_DI_SERVIZIO = new RegExp(
+  "^(subscribe now|subscribe|leave a comment|share|share this post|read more|upgrade to paid|" +
+    "get \\d+% off.*|start writing|get the app|listen now|watch now|" +
+    "this (essay|post|article) was originally published here\\.?)$",
+  "i",
+);
+
+/** Toglie le righe di servizio (Substack, beehiiv…) lasciando intatto il resto del testo. */
+export function senzaRigheDiServizio(testo: string): string {
+  return testo
+    .split("\n")
+    .filter((riga) => !RIGHE_DI_SERVIZIO.test(riga.trim()))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /** Converte l'HTML di un articolo in testo semplice, mantenendo paragrafi ed elenchi. */
 export function htmlInTesto(html: string): string {
   return decodificaEntita(
@@ -112,7 +130,7 @@ export function leggiFeed(xml: string): Feed {
       link,
       autore,
       data: data(tag(x, atom ? "published" : "pubDate") ?? tag(x, "updated") ?? tag(x, "dc:date")),
-      testo: contenuto ? htmlInTesto(decodificaSeEscapato(contenuto)) : "",
+      testo: contenuto ? senzaRigheDiServizio(htmlInTesto(decodificaSeEscapato(contenuto))) : "",
     });
   }
   return { titolo: titoloFeed, elementi };

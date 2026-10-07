@@ -41,6 +41,7 @@ const EnvSchema = z.object({
   INVIA_VARIANTE_B: z.preprocess(vuotoComeAssente, z.enum(["true", "false"]).default("true")),
   RSS_MAX_PER_FEED: z.preprocess(vuotoComeAssente, z.coerce.number().int().positive().default(3)),
   RSS_GIORNI: z.preprocess(vuotoComeAssente, z.coerce.number().int().positive().default(7)),
+  RSS_MAX_CARATTERI: z.preprocess(vuotoComeAssente, z.coerce.number().int().min(1000).default(20000)),
   // Fase 4: servizio sempre acceso (webhook di OpenWA + pianificazione interna)
   PORTA_SERVIZIO: z.preprocess(vuotoComeAssente, z.coerce.number().int().min(1).max(65535).default(3000)),
   WEBHOOK_URL: z.preprocess(vuotoComeAssente, z.string().url().optional()),
