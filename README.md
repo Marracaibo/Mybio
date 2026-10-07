@@ -74,6 +74,19 @@ La riga `segnaposto` compare solo se nel testo ci sono `[DATO DA INSERIRE]` o `[
 
 ---
 
+## Costi
+
+Il testo da pubblicare lo scrive il modello più capace (`CLAUDE_MODEL`, Sonnet 5.5); trascrizione,
+analisi e verifica, che sono compiti semplici di lettura e controllo, li fa un modello economico
+(`CLAUDE_MODEL_CONTROLLI`, Haiku 4.5). Il system prompt con le linee guida è in cache, quindi più file
+elaborati nello stesso giro costano meno.
+
+Stima indicativa (dipende dalla lunghezza di `linee-guida.md` e dei post): pochi centesimi di dollaro a post,
+circa 1,5–3 $ al mese con un post al giorno. Se la verifica ti sembra troppo permissiva, metti
+`CLAUDE_MODEL_CONTROLLI=claude-sonnet-5-5`: con `CLAUDE_EFFORT_CONTROLLI=low` costa di più di Haiku, ma meno del default.
+
+---
+
 ## Setup (Windows)
 
 Requisiti: Windows 10/11, [Node.js 22](https://nodejs.org), Google Drive per desktop, Docker Desktop (per OpenWA).
@@ -92,8 +105,10 @@ Nel file `.env`:
 | Variabile | Cosa mettere |
 |---|---|
 | `ANTHROPIC_API_KEY` | chiave API di Anthropic |
-| `CLAUDE_MODEL` | modello, default `claude-sonnet-5-5` |
-| `CLAUDE_FALLBACK` | `default` (consigliato): se il modello rifiuta una richiesta, Anthropic la riprova su un modello alternativo. `off` per disattivarlo |
+| `CLAUDE_MODEL` | modello che scrive le varianti, default `claude-sonnet-5-5` |
+| `CLAUDE_MODEL_CONTROLLI` | modello economico per trascrizione, analisi e verifica, default `claude-haiku-4-5` |
+| `CLAUDE_EFFORT_CONTROLLI` | ragionamento per i controlli (`low`, `medium`, `high`), default `low`; ignorato da Haiku 4.5 |
+| `CLAUDE_FALLBACK` | `default` (consigliato): se il modello rifiuta una richiesta, Anthropic la riprova su un modello alternativo (solo sui modelli che lo supportano, es. Sonnet 5.5). `off` per disattivarlo |
 | `SHARED_DIR` | cartella condivisa, es. `G:\Il mio Drive\Doublegram-LinkedIn` |
 | `PROFILO_NOME`, `PROFILO_RUOLO`, `PROFILO_PUBBLICO` | chi firma i post e per chi scrive (entrano nel prompt) |
 | `MAX_CARATTERI` | lunghezza massima del post, default 1300 |

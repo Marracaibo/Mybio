@@ -23,28 +23,44 @@ export function creaClient(config: Config): Anthropic {
 }
 
 /**
+ * Quale modello usa una chiamata:
+ * - "scrittura": l'adattamento, cioè il testo che verrà pubblicato (CLAUDE_MODEL);
+ * - "controllo": trascrizione, analisi e verifica, compiti semplici affidati a un modello economico
+ *   (CLAUDE_MODEL_CONTROLLI) con poco ragionamento (CLAUDE_EFFORT_CONTROLLI).
+ */
+export type Ruolo = "scrittura" | "controllo";
+
+/** Modelli che accettano `output_config.effort` (Haiku 4.5 e Sonnet 4.5 lo rifiutano con un 400). */
+const SUPPORTA_EFFORT = /^claude-(fable|mythos|opus-(4-[5-9]|5)|sonnet-(4-6|5))/;
+/** Modelli che accettano il fallback lato server `fallbacks: "default"`. */
+const SUPPORTA_FALLBACK = /^claude-(fable-5|mythos-5|opus-5|sonnet-5-5)/;
+
+/**
  * Una chiamata a Claude con output JSON vincolato allo schema zod.
  * Il JSON restituito è già validato dall'SDK.
  */
 export async function chiediJson<S extends z.ZodType>(
   client: Anthropic,
   config: Config,
-  opzioni: { nome: string; system: string; contenuto: Contenuto; schema: S },
+  opzioni: { nome: string; ruolo: Ruolo; system: string; contenuto: Contenuto; schema: S },
 ): Promise<z.infer<S>> {
+  const modello = opzioni.ruolo === "scrittura" ? config.CLAUDE_MODEL : config.CLAUDE_MODEL_CONTROLLI;
+  const effort =
+    opzioni.ruolo === "controllo" && SUPPORTA_EFFORT.test(modello) ? { effort: config.CLAUDE_EFFORT_CONTROLLI } : {};
   const fallback =
-    config.CLAUDE_FALLBACK === "default"
+    config.CLAUDE_FALLBACK === "default" && SUPPORTA_FALLBACK.test(modello)
       ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }
       : {};
 
   let risposta;
   try {
     risposta = await client.beta.messages.parse({
-      model: config.CLAUDE_MODEL,
+      model: modello,
       max_tokens: 16000,
       // Il system prompt (con le linee guida) è uguale per tutti i file: in cache costa meno.
       system: [{ type: "text", text: opzioni.system, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: opzioni.contenuto }],
-      output_config: { format: betaZodOutputFormat(opzioni.schema) },
+      output_config: { format: betaZodOutputFormat(opzioni.schema), ...effort },
       ...fallback,
     });
   } catch (e) {

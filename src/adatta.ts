@@ -43,6 +43,7 @@ function descriviPost(post: PostSorgente): string {
 async function analizza(ctx: Contesto, post: PostSorgente): Promise<Analisi> {
   return chiediJson(ctx.client, ctx.config, {
     nome: "analisi",
+    ruolo: "controllo",
     system: promptAnalisi(ctx.config, ctx.lineeGuida),
     schema: AnalisiSchema,
     contenuto: [{ type: "text", text: descriviPost(post) }],
@@ -84,6 +85,7 @@ async function adatta(
   }
   return chiediJson(ctx.client, ctx.config, {
     nome: precedente ? "adattamento (rigenerazione)" : "adattamento",
+    ruolo: "scrittura",
     system: promptAdattamento(ctx.config, ctx.lineeGuida),
     schema: AdattamentoSchema,
     contenuto: [{ type: "text", text: parti.join("\n") }],
@@ -147,6 +149,7 @@ async function verifica(
   ].join("\n");
   const esito = await chiediJson(ctx.client, ctx.config, {
     nome: "verifica",
+    ruolo: "controllo",
     system: promptVerifica(ctx.config, ctx.lineeGuida),
     schema: VerificaSchema,
     contenuto: [{ type: "text", text: testo }],

@@ -103,6 +103,7 @@ export async function estraiPost(client: Anthropic, config: Config, file: string
     }
     const trascrizione = await chiediJson(client, config, {
       nome: "trascrizione",
+      ruolo: "controllo",
       system: promptTrascrizione(),
       schema: TrascrizioneSchema,
       contenuto: [
