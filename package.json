@@ -1,0 +1,27 @@
+{
+  "name": "doublegram-linkedin-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Adatta post LinkedIn inglesi ad alte prestazioni in bozze italiane per il profilo sales di Doublegram e le invia su WhatsApp.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "adatta": "tsx src/adatta.ts",
+    "invia": "tsx src/invia.ts",
+    "inizializza": "tsx src/inizializza.ts",
+    "gruppi": "tsx src/gruppi.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "dotenv": "^18.0.6",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

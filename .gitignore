@@ -1,0 +1,18 @@
+# Segreti e stato locale: MAI nel repository né nella cartella condivisa
+.env
+.env.*
+!.env.example
+.stato.json
+
+# Log
+logs/
+*.log
+
+# Dati di sessione di OpenWA (WhatsApp)
+openwa-data/
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Node
+node_modules/
+dist/
