@@ -305,10 +305,12 @@ const STRUMENTO_ASSISTENZA = strumento(
 );
 
 function strumenti(config: Config, modo: Modo): Anthropic.Beta.BetaToolUnion[] {
-  const ricerche = modo === "cliente" ? 10 : modo === "briefing" ? 3 : 5;
+  const ricerche = modo === "cliente" ? 10 : modo === "briefing" || modo === "monitor" ? 4 : 6;
+  // Versioni "classiche" della ricerca: quelle con il filtro dinamico (_20260209) lanciano le ricerche da codice e,
+  // insieme a tanti strumenti nostri, Jarvis ripeteva la stessa ricerca fino a esaurire il limite senza risultati.
   return [
-    { type: "web_search_20260209", name: "web_search", max_uses: ricerche },
-    { type: "web_fetch_20260209", name: "web_fetch", max_uses: ricerche },
+    { type: "web_search_20250305", name: "web_search", max_uses: ricerche },
+    { type: "web_fetch_20250910", name: "web_fetch", max_uses: ricerche },
     ...STRUMENTI_BASE,
     ...STRUMENTI_AVANZATI.filter((t) => config.MEMORIA === "on" || ("name" in t && t.name !== "cerca_memoria")),
     ...(config.DATI_DOUBLEGRAM === "simulati" ? [STRUMENTO_DATI, STRUMENTO_ASSISTENZA] : []),

@@ -97,6 +97,8 @@ export function descriviPasso(nome: string, input: Record<string, unknown>): str
       }
       return `📖 Leggo ${host}`;
     }
+    case "code_execution":
+      return "🧮 Elaboro i risultati";
     case "leggi_chat":
       return "💬 Rileggo la chat";
     case "cerca_memoria":
