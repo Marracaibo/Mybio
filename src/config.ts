@@ -48,6 +48,12 @@ const EnvSchema = z.object({
   WEBHOOK_URL: z.preprocess(vuotoComeAssente, z.string().url().optional()),
   OPENWA_WEBHOOK_SECRET: z.preprocess(vuotoComeAssente, z.string().min(16, "almeno 16 caratteri").optional()),
   COMANDI_MAX_GIORNO: z.preprocess(vuotoComeAssente, z.coerce.number().int().positive().default(20)),
+  // Prototipo dei bot Doublegram su WhatsApp (src/doublegram.ts): /ai, /lookup, Scribe, Security, Shop
+  DOUBLEGRAM_BOT: z.preprocess(vuotoComeAssente, z.enum(["true", "false"]).default("true")),
+  DOUBLEGRAM_MAX_GIORNO: z.preprocess(vuotoComeAssente, z.coerce.number().int().positive().default(100)),
+  GROQ_API_KEY: z.preprocess(vuotoComeAssente, z.string().optional()),
+  SCRIBE_URL: z.preprocess(vuotoComeAssente, z.string().default("https://api.groq.com/openai/v1/audio/transcriptions")),
+  SCRIBE_MODELLO: z.preprocess(vuotoComeAssente, z.string().default("whisper-large-v3-turbo")),
   PIANIFICAZIONE_INTERNA: z.preprocess(vuotoComeAssente, z.enum(["true", "false"]).default("true")),
   ORARIO_RSS: z.preprocess(vuotoComeAssente, orario.default("07:00")),
   ORARIO_ADATTA: z.preprocess(vuotoComeAssente, orario.default("07:30")),

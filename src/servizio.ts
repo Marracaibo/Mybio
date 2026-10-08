@@ -4,6 +4,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { gestisciMessaggio, type MessaggioRicevuto } from "./comandi.js";
+import { gestisciDoublegram } from "./doublegram.js";
 import { caricaConfig, DATI_DIR, PROJECT_DIR, verificaSeparazioneCartelle, type Config } from "./config.js";
 import { creaLogger, descriviErrore } from "./log.js";
 import { configOpenWA } from "./openwa.js";
@@ -186,6 +187,8 @@ function avviaServer(config: Config): http.Server {
         (req.headers["x-openwa-idempotency-key"] as string | undefined) ?? evento.idempotencyKey ?? evento.data.id ?? "";
       const messaggio = evento.data;
       inCoda("comando", async () => {
+        // Prima i bot Doublegram (comandi /…, vocali, Security); se non lo riguardano, il motore LinkedIn.
+        if (await gestisciDoublegram({ config, log }, messaggio, chiave)) return;
         const dopo = await gestisciMessaggio({ config, log }, messaggio, chiave);
         // Lavori chiesti dal gruppo: nella stessa coda della pianificazione, mai in parallelo.
         if (dopo?.tipo === "invia") await eseguiComando("invia", ["--subito"]);

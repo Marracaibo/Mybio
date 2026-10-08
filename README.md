@@ -396,6 +396,22 @@ I log sono in `logs\AAAA-MM.log`; l'output delle attività pianificate anche in 
 
 ---
 
+## Prototipo: i bot Doublegram su WhatsApp
+
+Con `npm run servizio` attivo, nel gruppo configurato funzionano anche le versioni WhatsApp dei bot Doublegram
+(`src/doublegram.ts`). Scrivi `/doublegram` nel gruppo per l'elenco:
+
+| Comando | Cosa fa |
+|---|---|
+| `/ai <domanda>` | risponde Claude (citando un messaggio, lo usa come contesto) |
+| vocali | Scribe li trascrive in automatico (serve `GROQ_API_KEY`) · `/scribe on` / `off` |
+| `/lookup <numero>` o `/lookup @persona` | nome pubblico, foto, rubrica: utile per riconoscere i cloni |
+| `/security on` / `off` / `stato`, `/vieta <parola>`, `/consenti <parola>` | rimuove link e parole vietate scritti da chi non è admin (il numero collegato deve essere admin). Spento di default |
+| `/shop`, `/aggiungi <n>`, `/togli <n>`, `/carrello`, `/svuota`, `/ordina` | i piani veri di Doublegram, carrello e ordine con il link per attivarlo |
+
+Tutto resta nel gruppo: nessun messaggio privato. I prezzi vengono da doublegram.com/pricing; per cambiarli
+metti un `catalogo-doublegram.json` nella cartella condivisa. Tetto giornaliero: `DOUBLEGRAM_MAX_GIORNO`.
+
 ## Sviluppo
 
 ```powershell

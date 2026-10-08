@@ -25,7 +25,7 @@ export function configOpenWA(config: Config, richiediGruppo = true): ConfigOpenW
   };
 }
 
-async function richiesta(
+export async function richiesta(
   cfg: ConfigOpenWA,
   metodo: "GET" | "POST" | "PUT",
   percorso: string,
