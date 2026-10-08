@@ -23,9 +23,12 @@ export interface MessaggioRicevuto {
   id?: string;
   chatId?: string;
   from?: string;
+  author?: string;
   body?: string;
   fromMe?: boolean;
   type?: string;
+  timestamp?: number;
+  contact?: { pushName?: string; name?: string };
   media?: { mimetype?: string; data?: string; omitted?: boolean };
   quotedMessage?: { id?: string; body?: string };
 }

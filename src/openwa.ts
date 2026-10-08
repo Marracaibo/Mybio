@@ -179,6 +179,50 @@ export async function inviaVocale(cfg: ConfigOpenWA, ogg: Buffer, quotedMessageI
   return typeof id === "string" ? id : undefined;
 }
 
+/** Modifica il testo di un messaggio spedito da questo numero (WhatsApp lo consente per circa 15 minuti). */
+export async function modificaMessaggio(cfg: ConfigOpenWA, messageId: string, testo: string): Promise<void> {
+  await richiesta(cfg, "POST", "/messages/edit", { chatId: cfg.gruppo, messageId, body: testo });
+  ricordaInviato(testo);
+}
+
+/** Cancella per tutti un messaggio del gruppo. */
+export async function eliminaMessaggio(cfg: ConfigOpenWA, messageId: string): Promise<void> {
+  await richiesta(cfg, "POST", "/messages/delete", { chatId: cfg.gruppo, messageId, forEveryone: true });
+}
+
+/** Fissa un messaggio in cima al gruppo (24 ore, 7 o 30 giorni). Errori ignorati. */
+export async function fissaMessaggio(cfg: ConfigOpenWA, messageId: string, secondi = 86400): Promise<void> {
+  await richiesta(cfg, "POST", "/messages/pin", { chatId: cfg.gruppo, messageId, durationSeconds: secondi }).catch(() => undefined);
+}
+
+/** Manda un documento (PowerPoint, Excel, PDF…) nel gruppo. */
+export async function inviaDocumento(
+  cfg: ConfigOpenWA,
+  dati: Buffer,
+  nomeFile: string,
+  mimetype: string,
+  didascalia?: string,
+): Promise<string | undefined> {
+  const corpo: Record<string, string> = { chatId: cfg.gruppo, base64: dati.toString("base64"), mimetype, filename: nomeFile };
+  if (didascalia) corpo["caption"] = didascalia.slice(0, 1024);
+  const risposta = await richiesta(cfg, "POST", "/messages/send-document", corpo);
+  const id = (risposta as { messageId?: unknown } | null)?.messageId;
+  ricordaId(typeof id === "string" ? id : undefined);
+  return typeof id === "string" ? id : undefined;
+}
+
+/** Manda uno sticker: whatsapp-web.js converte da sé il PNG in WebP. */
+export async function inviaSticker(cfg: ConfigOpenWA, png: Buffer): Promise<string | undefined> {
+  const risposta = await richiesta(cfg, "POST", "/messages/send-sticker", {
+    chatId: cfg.gruppo,
+    base64: png.toString("base64"),
+    mimetype: "image/png",
+  });
+  const id = (risposta as { messageId?: unknown } | null)?.messageId;
+  ricordaId(typeof id === "string" ? id : undefined);
+  return typeof id === "string" ? id : undefined;
+}
+
 /** Scarica il file allegato a un messaggio (quando il webhook non lo porta già dentro). */
 export async function scaricaMedia(cfg: ConfigOpenWA, chatId: string, messageId: string): Promise<Buffer> {
   const url = `${cfg.url}/api/sessions/${encodeURIComponent(cfg.sessione)}/messages/${encodeURIComponent(chatId)}/${encodeURIComponent(messageId)}/media`;
@@ -235,7 +279,8 @@ export async function registraWebhook(cfg: ConfigOpenWA, url: string, secret: st
     url,
     // message.sent: con il numero personale i messaggi scritti dal telefono collegato sono "inviati",
     // non "ricevuti"; senza, i comandi e le fonti mandate da chi ha collegato il numero non arrivano.
-    events: ["message.received", "message.sent"],
+    // message.reaction: le approvazioni con 👍 e le risposte del quiz.
+    events: ["message.received", "message.sent", "message.reaction"],
     secret,
     filters: { conditions: [{ field: "chatId", operator: "is", value: [cfg.gruppo] }] },
     retryCount: 3,

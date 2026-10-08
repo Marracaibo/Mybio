@@ -16,11 +16,16 @@ import {
   scrivendoMentre,
   type ConfigOpenWA,
 } from "./openwa.js";
+import { proponi } from "./approvazioni.js";
+import { memorizzaTrascrizione, nomeTitolare, sospendiMemoria, statoMemoria } from "./memoria.js";
 import { lavoraPost, lavoroCitato } from "./post.js";
+import { Progresso } from "./progresso.js";
+import { avviaQuiz, classificaSettimana, fermaQuiz } from "./quiz.js";
 import {
   chiediSchiavo,
   conversazioneCitata,
   eseguiBriefing,
+  eseguiMonitor,
   ricordaTrascrizione,
   rispondiSchiavo,
   salvaDossier,
@@ -198,6 +203,8 @@ const MENU = [
   "*Jarvis*  /schiavo <richiesta> (o /jarvis, o un vocale che inizia con \"Jarvis\": risponde a voce) – il maggiordomo: cerca sul web, legge la chat, guarda foto e PDF citati, numeri di Doublegram (simulati) e grafici, card, sondaggi e promemoria",
   "*Clienti*  /cliente <azienda> – dossier prima di una chiamata: chi sono, community, persone, argomenti, obiezioni, email pronta",
   "*Briefing*  ogni mattina alle 8:45 (o subito con /briefing): ieri nel gruppo, oggi, numeri, notizie, consigli",
+  "*Quiz*  /quiz [tema] [n domande] – si gioca con le reazioni 👍❤️😂😮 · /classifica · /quiz stop",
+  "*Altro*  /sticker <idea> · /ricerca <tema> (rapporto PDF) · /memoria · /monitor · file veri: \"/schiavo fammi una presentazione su…\" · Linear (simulato): \"/schiavo crea un compito per…\" · le proposte si approvano con 👍",
   "",
   "Il motore LinkedIn resta com'è: adatta, adatta subito, manda bozza, aiuto (citando una bozza).",
 ].join("\n");
@@ -373,7 +380,7 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
   };
 
   // --- Il maggiordomo
-  const chi = msg.fromMe ? "il Padrone (il titolare del numero collegato)" : (msg.contact?.name ?? msg.contact?.pushName ?? soloCifre(msg.author ?? msg.from ?? ""));
+  const chi = msg.fromMe ? `${nomeTitolare()} (il titolare del numero collegato)` : (msg.contact?.name ?? msg.contact?.pushName ?? soloCifre(msg.author ?? msg.from ?? ""));
   const schiavo = async (
     richiestaTesto: string,
     opzioni: { precedenti?: Parameters<typeof chiediSchiavo>[2]["precedenti"]; trascrizione?: string; modo?: Modo; aVoce?: boolean } = {},
@@ -385,6 +392,7 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
     }
     salvaStato(stato);
     if (msg.id) void reagisci(openwa, msg.id, "🎩");
+    let progresso: Progresso | undefined;
     try {
       let allegato: Allegato | undefined;
       let trascrizione = opzioni.trascrizione;
@@ -397,22 +405,25 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
       const citato = opzioni.precedenti ? undefined : msg.quotedMessage?.body;
       // "rispondimi a voce", "mandami un vocale": risposta con un vocale anche se la richiesta è scritta.
       const aVoce = opzioni.aVoce ?? /(a voce|con un vocale|in vocale|mandami un vocale)/i.test(richiestaTesto);
-      const { risposta, scambi } = await scrivendoMentre(openwa, () =>
-        chiediSchiavo({ config, log, openwa, chi }, richiestaTesto, {
-          precedenti: opzioni.precedenti,
-          allegato,
-          trascrizione,
-          citato,
-          modo: opzioni.modo,
-          aVoce,
-        }),
-      );
-      await rispondiSchiavo({ config, log, openwa }, risposta, scambi, { rispondiA: msg.id, aVoce });
+      // Il messaggio di avanzamento (si vede Jarvis lavorare) diventa poi la risposta.
+      progresso = new Progresso(openwa, aVoce ? "🎩 Un istante, Signore… (rispondo a voce)" : "🎩 Un istante, Signore…", msg.id);
+      await progresso.inizia();
+      const { risposta, scambi } = await chiediSchiavo({ config, log, openwa, chi, progresso, rispondiA: msg.id }, richiestaTesto, {
+        precedenti: opzioni.precedenti,
+        allegato,
+        trascrizione,
+        citato,
+        modo: opzioni.modo,
+        aVoce,
+      });
+      await rispondiSchiavo({ config, log, openwa }, risposta, scambi, { rispondiA: msg.id, aVoce, progresso });
       if (opzioni.modo === "cliente") log.info(`Schiavo: dossier salvato in 06-clienti/${salvaDossier(config, richiestaTesto, risposta)}`);
       log.info(`Schiavo: risposto (${risposta.length} caratteri)`);
     } catch (e) {
       log.errore(`Schiavo: ${descriviErrore(e)}`);
-      await rispondi(`🎩 Chiedo venia, Signore, qualcosa è andato storto: ${descriviErrore(e)}`);
+      const scuse = `🎩 Chiedo venia, Signore, qualcosa è andato storto: ${descriviErrore(e)}`;
+      if (progresso) await progresso.fine(scuse);
+      else await rispondi(scuse);
     } finally {
       if (msg.id) void reagisci(openwa, msg.id, "");
     }
@@ -480,7 +491,10 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
       if (!audio.length) throw new Error("audio non disponibile");
       const trascritto = await trascrivi(config, audio, msg.media?.mimetype ?? "audio/ogg");
       log.info(`Scribe: vocale trascritto (${trascritto.length} caratteri)${stato.scribe.attiva ? "" : " in silenzio"}`);
-      if (msg.id && trascritto) ricordaTrascrizione(msg.id, trascritto);
+      if (msg.id && trascritto) {
+        ricordaTrascrizione(msg.id, trascritto);
+        memorizzaTrascrizione(config, msg.id, trascritto);
+      }
       if (stato.scribe.attiva) await rispondi(trascritto ? `🎙️ ${trascritto}` : "🎙️ (vocale senza parole riconoscibili)");
       // "Jarvis, …" / "Schiavo, …" a voce, o un vocale che risponde al maggiordomo: risponde con un vocale.
       const chiamata = /^\W*(jarvis|giarvis|schiavo)\b[\s,.:;!?]*/i.exec(trascritto);
@@ -521,7 +535,7 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
   // --- Comandi
   const nome = (comando[1] ?? "").toLowerCase();
   const argomento = (comando[2] ?? "").trim();
-  const noti = ["doublegram", "aiuto", "help", "menu", "ai", "post", "lookup", "scribe", "security", "vieta", "consenti", "shop", "aggiungi", "togli", "carrello", "svuota", "ordina", "schiavo", "jarvis", "cliente", "prospect", "briefing"];
+  const noti = ["doublegram", "aiuto", "help", "menu", "ai", "post", "lookup", "scribe", "security", "vieta", "consenti", "shop", "aggiungi", "togli", "carrello", "svuota", "ordina", "schiavo", "jarvis", "cliente", "prospect", "briefing", "quiz", "classifica", "sticker", "memoria", "ricerca", "monitor"];
   if (!noti.includes(nome)) return false;
   segna();
   const cliente = msg.fromMe ? "io" : soloCifre(msg.author ?? msg.from ?? "") || "sconosciuto";
@@ -574,6 +588,88 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
           return true;
         }
         await schiavo(argomento, { modo: "cliente" });
+        return true;
+      }
+
+      case "quiz": {
+        if (/^(stop|ferma|basta)\b/i.test(argomento)) {
+          salvaStato(stato);
+          await rispondi(fermaQuiz() ? "🎩 Quiz interrotto, Signore. Conteggio i punti fin qui." : "🎩 Non c'è nessun quiz in corso.");
+          return true;
+        }
+        if (!sottoTetto()) {
+          salvaStato(stato);
+          await rispondi("🎲 Limite giornaliero di richieste raggiunto, riprova domani.");
+          return true;
+        }
+        salvaStato(stato);
+        // "/quiz telegram 7" → tema telegram, 7 domande
+        const numero = /\b(\d{1,2})\s*(domande)?\s*$/i.exec(argomento);
+        const tema = numero ? argomento.slice(0, numero.index).trim() : argomento;
+        await rispondi("🎲 Preparo le domande, Signori: un attimo di pazienza…");
+        try {
+          const esito = await avviaQuiz({ config, log, openwa }, tema, numero ? Number(numero[1]) : 5, 30);
+          if (!esito.startsWith("Quiz")) await rispondi(`🎲 ${esito}`);
+        } catch (e) {
+          await rispondi(`🎲 Il quiz non è partito: ${descriviErrore(e)}`);
+        }
+        return true;
+      }
+
+      case "classifica":
+        salvaStato(stato);
+        await rispondi(classificaSettimana());
+        return true;
+
+      case "sticker":
+        if (!argomento) {
+          salvaStato(stato);
+          await rispondi("🖌️ Mi dica cosa disegnare, Signore: per esempio /sticker maggiordomo con vassoio e scritta APPROVATO");
+          return true;
+        }
+        await schiavo(`Disegna uno sticker con crea_sticker: ${argomento}. Poi rispondi solo con una riga.`);
+        return true;
+
+      case "ricerca":
+        if (!argomento) {
+          salvaStato(stato);
+          await rispondi("🧭 Su cosa devo indagare, Signore? Per esempio: /ricerca mercato dei bot per community Telegram nel 2026");
+          return true;
+        }
+        await schiavo(`Fai una ricerca approfondita (ricerca_approfondita) su: ${argomento}. Poi rispondi in una riga.`);
+        return true;
+
+      case "memoria": {
+        salvaStato(stato);
+        if (/^off\b/i.test(argomento)) {
+          sospendiMemoria(false);
+          await rispondi("🗄️ Memoria sospesa: da ora non salvo più i messaggi (quelli già salvati restano). /memoria on per riprendere.");
+        } else if (/^on\b/i.test(argomento)) {
+          sospendiMemoria(true);
+          await rispondi("🗄️ Memoria riattivata.");
+        } else if (/^(cancella|svuota)\b/i.test(argomento)) {
+          await proponi(openwa, "cancella_memoria", "Cancellare TUTTA la memoria del gruppo (tutti i messaggi salvati)? Non si torna indietro.", {});
+        } else {
+          await rispondi(statoMemoria(config));
+        }
+        return true;
+      }
+
+      case "monitor": {
+        if (!sottoTetto()) {
+          salvaStato(stato);
+          await rispondi("🔔 Limite giornaliero di richieste raggiunto.");
+          return true;
+        }
+        salvaStato(stato);
+        if (msg.id) void reagisci(openwa, msg.id, "🔔");
+        try {
+          await eseguiMonitor({ config, log, openwa });
+        } catch (e) {
+          await rispondi(`🔔 Il monitoraggio non è riuscito: ${descriviErrore(e)}`);
+        } finally {
+          if (msg.id) void reagisci(openwa, msg.id, "");
+        }
         return true;
       }
 

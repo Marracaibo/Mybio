@@ -6,10 +6,28 @@ import { DATI_DIR, type Config } from "./config.js";
 import { riepilogo, riepilogoAssistenza, AVVISO_SIMULATI } from "./dati-simulati.js";
 import { creaCard } from "./grafica.js";
 import { creaGrafico, type DatiGrafico } from "./grafico.js";
+import { proponi, type TipoProposta } from "./approvazioni.js";
+import { creaFile, type TipoFile } from "./file-claude.js";
+import { aggiornaCompito, cercaCompiti, creaCompito } from "./linear-simulato.js";
 import { descriviErrore, type Logger } from "./log.js";
-import { inviaImmagine, inviaTesto, inviaVocale, richiesta, scaricaMediaConTipo, type ConfigOpenWA } from "./openwa.js";
+import { cercaMemoria, memorizza } from "./memoria.js";
+import {
+  fissaMessaggio,
+  inviaDocumento,
+  inviaImmagine,
+  inviaSticker,
+  inviaTesto,
+  inviaVocale,
+  richiesta,
+  scaricaMediaConTipo,
+  type ConfigOpenWA,
+} from "./openwa.js";
 import { lavoraPost } from "./post.js";
 import { leggiLineeGuida } from "./pipeline.js";
+import { descriviPasso, Progresso } from "./progresso.js";
+import { avviaQuiz } from "./quiz.js";
+import { ricercaApprofondita } from "./ricerca.js";
+import { creaSticker } from "./sticker.js";
 import { inizioTesto, oggi, slug } from "./testo.js";
 
 /**
@@ -22,7 +40,7 @@ import { inizioTesto, oggi, slug } from "./testo.js";
  * "briefing" (ogni mattina alle BRIEFING_ORARIO, o con /briefing). I dati di Doublegram sono SIMULATI.
  */
 
-export type Modo = "normale" | "cliente" | "briefing";
+export type Modo = "normale" | "cliente" | "briefing" | "monitor";
 
 const MAX_GIRI = 10;
 
@@ -42,6 +60,11 @@ interface StatoSchiavo {
   trascrizioni?: Record<string, string>;
   /** data (YYYY-MM-DD) dell'ultimo briefing automatico */
   ultimoBriefing?: string;
+  /** turni di monitoraggio già fatti ("YYYY-MM-DD HH:MM") e cose già segnalate (per non ripetersi) */
+  monitorFatti?: string[];
+  segnalati?: string[];
+  /** ricerche approfondite per giorno */
+  ricerche?: Record<string, number>;
   note: string[];
   promemoria: Promemoria[];
   /** chiave: id del messaggio di risposta o "inizio:<testo>" → la conversazione fin lì */
@@ -53,7 +76,7 @@ const FILE_STATO = path.join(DATI_DIR, ".schiavo.json");
 function caricaStato(): StatoSchiavo {
   try {
     const d = JSON.parse(fs.readFileSync(FILE_STATO, "utf8")) as Partial<StatoSchiavo>;
-    return { ultimoBriefing: d.ultimoBriefing, trascrizioni: d.trascrizioni ?? {}, note: d.note ?? [], promemoria: d.promemoria ?? [], conversazioni: d.conversazioni ?? {} };
+    return { ultimoBriefing: d.ultimoBriefing, monitorFatti: d.monitorFatti ?? [], segnalati: d.segnalati ?? [], ricerche: d.ricerche ?? {}, trascrizioni: d.trascrizioni ?? {}, note: d.note ?? [], promemoria: d.promemoria ?? [], conversazioni: d.conversazioni ?? {} };
   } catch {
     return { note: [], promemoria: [], conversazioni: {} };
   }
@@ -103,6 +126,9 @@ export function conversazioneCitata(citato: { id?: string; body?: string } | und
 
 // ---------- Strumenti ----------
 
+// Niente "strict": con più di 20 strumenti l'API lo rifiuta (grammatica troppo grande). Gli input li controlla
+// comunque eseguiStrumento, campo per campo.
+
 const strumento = (
   name: string,
   description: string,
@@ -110,7 +136,6 @@ const strumento = (
 ): Anthropic.Beta.BetaToolUnion => ({
   name,
   description,
-  strict: true,
   input_schema: { type: "object", properties, required: Object.keys(properties), additionalProperties: false },
 });
 
@@ -180,6 +205,87 @@ const STRUMENTI_BASE: Anthropic.Beta.BetaToolUnion[] = [
   ),
 ];
 
+const STRUMENTI_AVANZATI: Anthropic.Beta.BetaToolUnion[] = [
+  strumento(
+    "cerca_memoria",
+    "Cerca nella memoria completa del gruppo (tutti i messaggi salvati, anche vecchi di mesi, con i vocali trascritti): decisioni passate, chi ha detto cosa, quando se n'è parlato. Parole vuote = tutti i messaggi del periodo.",
+    {
+      parole: { type: "string", description: "Parole chiave (anche più d'una), o stringa vuota" },
+      da: { type: "string", description: "Data iniziale YYYY-MM-DD, o stringa vuota" },
+      a: { type: "string", description: "Data finale YYYY-MM-DD, o stringa vuota" },
+      autore: { type: "string", description: "Nome di chi ha scritto, o stringa vuota" },
+    },
+  ),
+  strumento(
+    "linear_crea",
+    "Crea un compito su Linear (SIMULATO per ora). Usalo direttamente solo se te lo chiedono; se è una tua idea usa chiedi_approvazione. Per l'etichetta 'agent' servono obiettivo e criteri di accettazione.",
+    {
+      titolo: { type: "string" },
+      descrizione: { type: "string" },
+      assegnatario: { type: "string", description: "Nome, o stringa vuota" },
+      priorita: { type: "string", enum: ["Urgente", "Alta", "Media", "Bassa", "Nessuna"] },
+      scadenza: { type: "string", description: "YYYY-MM-DD, o stringa vuota" },
+      etichette: { type: "array", items: { type: "string" } },
+      obiettivo: { type: "string", description: "Stringa vuota se non serve" },
+      criteri_accettazione: { type: "array", items: { type: "string" } },
+      file_coinvolti: { type: "array", items: { type: "string" } },
+    },
+  ),
+  strumento("linear_cerca", "Cerca compiti su Linear (SIMULATO per ora).", {
+    testo: { type: "string", description: "Parole nel titolo, o stringa vuota" },
+    stato: { type: "string", description: "Backlog, Todo, In Progress, In Review, Done, Canceled, 'aperti' o stringa vuota" },
+    assegnatario: { type: "string", description: "Nome o stringa vuota" },
+    in_scadenza_giorni: { type: "integer", description: "Solo quelli che scadono entro N giorni (0 = nessun filtro)" },
+  }),
+  strumento("linear_aggiorna", "Aggiorna un compito su Linear (SIMULATO per ora): stato, assegnatario, priorità, scadenza, commento.", {
+    id: { type: "string", description: "Es. DG-104" },
+    stato: { type: "string", description: "Nuovo stato o stringa vuota" },
+    assegnatario: { type: "string", description: "Stringa vuota per lasciarlo" },
+    priorita: { type: "string", description: "Stringa vuota per lasciarla" },
+    scadenza: { type: "string", description: "YYYY-MM-DD o stringa vuota" },
+    commento: { type: "string", description: "Stringa vuota se nessuno" },
+  }),
+  strumento(
+    "chiedi_approvazione",
+    "Manda nel gruppo una proposta che si approva con 👍 (e si scarta con 👎). Usalo per le azioni che proponi di tua iniziativa: un compito, un promemoria, un sondaggio. Quando qualcuno mette 👍 la eseguo io.",
+    {
+      tipo: { type: "string", enum: ["compito", "promemoria", "sondaggio"] },
+      descrizione: { type: "string", description: "La proposta in 1-3 righe, chiara per tutti" },
+      parametri_json: {
+        type: "string",
+        description:
+          'JSON con i parametri: compito {"titolo","descrizione","assegnatario","priorita","scadenza","etichette":[],"obiettivo","criteri_accettazione":[]}; promemoria {"quando":"ISO 8601 con fuso","testo"}; sondaggio {"domanda","opzioni":[],"scelta_multipla":false}',
+      },
+    },
+  ),
+  strumento(
+    "crea_file",
+    "Crea un file vero e lo manda nel gruppo: presentazione PowerPoint (pptx), foglio Excel (xlsx, anche con formule e grafici), documento Word (docx) o PDF. Ci mette 1-3 minuti e lavora in background. Metti nelle istruzioni TUTTO il contenuto e i numeri (prendili prima con gli altri strumenti): chi crea il file non vede questa conversazione.",
+    {
+      tipo: { type: "string", enum: ["pptx", "xlsx", "docx", "pdf"] },
+      nome_file: { type: "string", description: "Senza estensione, es. demo-dashboard" },
+      istruzioni: { type: "string", description: "Struttura, contenuto completo, dati, tono, numero di slide/pagine" },
+    },
+  ),
+  strumento(
+    "ricerca_approfondita",
+    "Ricerca approfondita sul web con più ricercatori in parallelo e rapporto in PDF con le fonti (5-10 minuti, in background, costa qualche dollaro). Solo quando chiedono esplicitamente una ricerca approfondita, un'analisi di mercato o un rapporto.",
+    { tema: { type: "string", description: "Il tema, con lo scopo e cosa interessa al team" } },
+  ),
+  strumento(
+    "avvia_quiz",
+    "Avvia un quiz nel gruppo (si gioca con le reazioni sulla card, con punti e classifica). Solo se te lo chiedono.",
+    {
+      tema: { type: "string", description: "Tema del quiz, o stringa vuota per misto" },
+      domande: { type: "integer", description: "Da 3 a 10" },
+      secondi: { type: "integer", description: "Secondi per domanda, da 15 a 60" },
+    },
+  ),
+  strumento("crea_sticker", "Disegna uno sticker WhatsApp (grafica con testo e simboli, niente foto né volti reali) e lo manda nel gruppo.", {
+    descrizione: { type: "string", description: "Cosa deve rappresentare e il testo, es. 'maggiordomo con vassoio, scritta APPROVATO'" },
+  }),
+];
+
 const STRUMENTO_DATI = strumento(
   "dati_doublegram",
   `Numeri di Doublegram per un periodo: utenti, attivi, gruppi, abbonati Premium, nuovi e disdette, MRR, ricavi, costi, margine, churn, conversione, paesi, uso dei prodotti, canali e motivi di disdetta, più la serie giorno per giorno (o settimanale sopra i 45 giorni). ATTENZIONE: ${AVVISO_SIMULATI}.`,
@@ -204,6 +310,7 @@ function strumenti(config: Config, modo: Modo): Anthropic.Beta.BetaToolUnion[] {
     { type: "web_search_20260209", name: "web_search", max_uses: ricerche },
     { type: "web_fetch_20260209", name: "web_fetch", max_uses: ricerche },
     ...STRUMENTI_BASE,
+    ...STRUMENTI_AVANZATI.filter((t) => config.MEMORIA === "on" || ("name" in t && t.name !== "cerca_memoria")),
     ...(config.DATI_DOUBLEGRAM === "simulati" ? [STRUMENTO_DATI, STRUMENTO_ASSISTENZA] : []),
   ];
 }
@@ -213,6 +320,44 @@ interface Contesto {
   log: Logger;
   openwa: ConfigOpenWA;
   chi: string;
+  /** messaggio di avanzamento da aggiornare mentre lavora */
+  progresso?: Progresso;
+  /** messaggio a cui rispondere (per i lavori in background) */
+  rispondiA?: string;
+}
+
+/** Aggiunge un promemoria (anche da un'approvazione con 👍). */
+export function aggiungiPromemoria(quandoTesto: string, testo: string, chi: string): string {
+  const stato = caricaStato();
+  const quando = new Date(quandoTesto);
+  if (Number.isNaN(quando.getTime())) return "Data non valida: usa il formato ISO 8601 con fuso orario.";
+  if (quando.getTime() < Date.now() - 60_000) return "Quella data è già passata.";
+  if (stato.promemoria.length >= 50) return "Ci sono già 50 promemoria: annullane qualcuno.";
+  stato.promemoria.push({ quando: quando.toISOString(), testo, chi });
+  stato.promemoria.sort((a, b) => a.quando.localeCompare(b.quando));
+  salvaStato(stato);
+  return `Promemoria programmato per ${quando.toLocaleString("it-IT", { timeZone: process.env["TZ"] || "Europe/Rome" })}.`;
+}
+
+/** Crea un file con le skill di Claude e lo manda nel gruppo, con il suo messaggio di avanzamento. */
+async function lavoroFile(ctx: Contesto, tipo: TipoFile, nomeFile: string, istruzioni: string): Promise<void> {
+  const { config, log, openwa } = ctx;
+  const progresso = new Progresso(openwa, `📎 *Preparo ${nomeFile}.${tipo}*`, ctx.rispondiA);
+  await progresso.inizia();
+  try {
+    const file = await creaFile(config, { tipo, nomeFile, istruzioni }, (p) => progresso.passo(p));
+    const cartella = path.join(config.SHARED_DIR, "08-file");
+    fs.mkdirSync(cartella, { recursive: true });
+    fs.writeFileSync(path.join(cartella, `${oggi()}_${file.nome}`), file.dati);
+    await inviaDocumento(openwa, file.dati, file.nome, file.mimetype);
+    await progresso.fine(`📎 *${file.nome}* è pronto, Signore: lo trova qui sotto (e in 08-file/).
+${file.nota ? `
+${file.nota}` : ""}`);
+    log.info(`Schiavo: file ${file.nome} (${Math.round(file.dati.length / 1024)} KB)`);
+  } catch (e) {
+    log.errore(`Schiavo, file: ${descriviErrore(e)}`);
+    await progresso.fine(`📎 Mi rincresce, Signore: il file ${nomeFile}.${tipo} non è venuto (${descriviErrore(e)}).`);
+  }
 }
 
 async function leggiChat(openwa: ConfigOpenWA, quanti: number): Promise<string> {
@@ -270,16 +415,8 @@ async function eseguiStrumento(ctx: Contesto, nome: string, input: Record<string
       });
       return "Sondaggio inviato nel gruppo.";
     }
-    case "programma_promemoria": {
-      const quando = new Date(String(input["quando"] ?? ""));
-      if (Number.isNaN(quando.getTime())) return "Data non valida: usa il formato ISO 8601 con fuso orario.";
-      if (quando.getTime() < Date.now() - 60_000) return "Quella data è già passata.";
-      if (stato.promemoria.length >= 50) return "Ci sono già 50 promemoria: annullane qualcuno.";
-      stato.promemoria.push({ quando: quando.toISOString(), testo: String(input["testo"] ?? ""), chi: ctx.chi });
-      stato.promemoria.sort((a, b) => a.quando.localeCompare(b.quando));
-      salvaStato(stato);
-      return `Promemoria programmato per ${quando.toLocaleString("it-IT", { timeZone: process.env["TZ"] || "Europe/Rome" })}.`;
-    }
+    case "programma_promemoria":
+      return aggiungiPromemoria(String(input["quando"] ?? ""), String(input["testo"] ?? ""), ctx.chi);
     case "elenca_promemoria":
       return stato.promemoria.length
         ? stato.promemoria
@@ -330,6 +467,76 @@ async function eseguiStrumento(ctx: Contesto, nome: string, input: Record<string
         );
       });
       return "Preparazione del post avviata: card e testo (o le domande) arriveranno tra un minuto.";
+    case "cerca_memoria":
+      return cercaMemoria(config, {
+        parole: String(input["parole"] ?? ""),
+        da: String(input["da"] ?? "") || undefined,
+        a: String(input["a"] ?? "") || undefined,
+        autore: String(input["autore"] ?? "") || undefined,
+      });
+    case "linear_crea":
+      return creaCompito({
+        titolo: String(input["titolo"] ?? ""),
+        descrizione: String(input["descrizione"] ?? ""),
+        assegnatario: String(input["assegnatario"] ?? ""),
+        priorita: String(input["priorita"] ?? ""),
+        scadenza: String(input["scadenza"] ?? ""),
+        etichette: Array.isArray(input["etichette"]) ? input["etichette"].map(String) : [],
+        obiettivo: String(input["obiettivo"] ?? ""),
+        criteri_accettazione: Array.isArray(input["criteri_accettazione"]) ? input["criteri_accettazione"].map(String) : [],
+        file_coinvolti: Array.isArray(input["file_coinvolti"]) ? input["file_coinvolti"].map(String) : [],
+        autore: ctx.chi,
+      });
+    case "linear_cerca":
+      return cercaCompiti({
+        testo: String(input["testo"] ?? ""),
+        stato: String(input["stato"] ?? "") || undefined,
+        assegnatario: String(input["assegnatario"] ?? "") || undefined,
+        in_scadenza_giorni: Number(input["in_scadenza_giorni"]) || undefined,
+      });
+    case "linear_aggiorna":
+      return aggiornaCompito({
+        id: String(input["id"] ?? ""),
+        stato: String(input["stato"] ?? "") || undefined,
+        assegnatario: String(input["assegnatario"] ?? "") || undefined,
+        priorita: String(input["priorita"] ?? "") || undefined,
+        scadenza: String(input["scadenza"] ?? "") || undefined,
+        commento: String(input["commento"] ?? "") || undefined,
+        autore: ctx.chi,
+      });
+    case "chiedi_approvazione": {
+      let parametri: Record<string, unknown> = {};
+      try {
+        parametri = JSON.parse(String(input["parametri_json"] ?? "{}")) as Record<string, unknown>;
+      } catch {
+        return "parametri_json non è un JSON valido.";
+      }
+      const tipo = String(input["tipo"] ?? "") as TipoProposta;
+      if (!["compito", "promemoria", "sondaggio"].includes(tipo)) return "Tipo di proposta non valido.";
+      return proponi(openwa, tipo, String(input["descrizione"] ?? ""), parametri);
+    }
+    case "crea_file": {
+      const tipo = String(input["tipo"] ?? "") as TipoFile;
+      if (!["pptx", "xlsx", "docx", "pdf"].includes(tipo)) return "Tipo di file non valido.";
+      void lavoroFile(ctx, tipo, String(input["nome_file"] ?? "documento"), String(input["istruzioni"] ?? ""));
+      return "Creazione del file avviata in background: nel gruppo c'è già il messaggio che mostra l'avanzamento, e il file arriverà lì tra 1-3 minuti.";
+    }
+    case "ricerca_approfondita": {
+      const giorno = oggi();
+      const fatte = stato.ricerche?.[giorno] ?? 0;
+      if (fatte >= config.RICERCHE_MAX_GIORNO) return `Oggi sono già state fatte ${fatte} ricerche approfondite (limite RICERCHE_MAX_GIORNO): riprova domani.`;
+      stato.ricerche = { [giorno]: fatte + 1 };
+      salvaStato(stato);
+      void ricercaApprofondita({ config, log, openwa }, String(input["tema"] ?? ""), ctx.rispondiA);
+      return "Ricerca approfondita avviata in background: nel gruppo c'è il messaggio con l'avanzamento, il rapporto PDF arriverà tra 5-10 minuti.";
+    }
+    case "avvia_quiz":
+      return avviaQuiz({ config, log, openwa }, String(input["tema"] ?? ""), Number(input["domande"]) || 5, Number(input["secondi"]) || 30);
+    case "crea_sticker": {
+      const { png, descrizione } = await creaSticker(config, String(input["descrizione"] ?? ""));
+      await inviaSticker(openwa, png);
+      return `Sticker inviato: ${descrizione}`;
+    }
     default:
       return `Strumento sconosciuto: ${nome}`;
   }
@@ -387,6 +594,16 @@ Non programmare promemoria e non mandare sondaggi di tua iniziativa: proponili, 
 In fondo metti una riga che contiene solo "VOCE:" e sotto una versione parlata di circa 40 secondi (al massimo
 600 caratteri), senza elenchi, link, emoji né asterischi, con parole italiane (la voce legge male l'inglese:
 "riepilogo" invece di "briefing", "incasso mensile" invece di "MRR").`,
+  monitor: `
+MODALITÀ MONITORAGGIO (turno automatico, nessuno ti ha scritto): controlli se c'è qualcosa che il team DEVE sapere ora.
+Guarda: 1-3 ricerche web su novità degli ultimi giorni (Telegram per community e bot, concorrenti come Combot, Rose,
+Group Help, Shieldy, e le aziende dei dossier clienti indicate sotto); i compiti Linear che scadono entro 2 giorni
+(linear_cerca con in_scadenza_giorni 2); anomalie nei numeri e nell'assistenza degli ultimi 3 giorni rispetto ai
+precedenti (dati simulati).
+Scrivi SOLO se trovi qualcosa di nuovo, concreto e utile adesso, che non è nell'elenco delle cose già segnalate.
+Se non c'è niente di davvero importante rispondi esattamente NIENTE (e nient'altro).
+Se scrivi: al massimo 700 caratteri, cosa è successo, perché conta per Doublegram, cosa suggerisci, con la fonte.
+Se serve un'azione puoi proporla con chiedi_approvazione.`,
 };
 
 const ISTRUZIONI_VOCE = `
@@ -407,7 +624,12 @@ Cosa sai fare (usa gli strumenti, non limitarti a descrivere):
 - rispondere sui numeri di Doublegram (dati_doublegram) e sull'assistenza clienti e la soddisfazione (assistenza_doublegram);
 - guardare immagini e PDF e ascoltare vocali che ti vengono citati (arrivano già nel messaggio);
 - mandare card grafiche nello stile Doublegram News (invia_card), sondaggi (invia_sondaggio), promemoria a orario (programma_promemoria);
-- preparare post per il canale Telegram (crea_post_canale) e ricordare informazioni nel tempo (ricorda / dimentica).
+- preparare post per il canale Telegram (crea_post_canale) e ricordare informazioni nel tempo (ricorda / dimentica);
+- cercare in tutta la memoria del gruppo, anche messaggi vecchi di mesi (cerca_memoria);
+- gestire i compiti su Linear (linear_crea / linear_cerca / linear_aggiorna; per ora è SIMULATO: dillo);
+- proporre azioni che il team approva con un 👍 (chiedi_approvazione);
+- creare file veri: PowerPoint, Excel, Word, PDF (crea_file), e ricerche approfondite con rapporto PDF (ricerca_approfondita);
+- far giocare il gruppo a un quiz (avvia_quiz) e disegnare sticker (crea_sticker).
 
 Doublegram: suite di bot per community Telegram (Security, Scribe, Doublegram AI, Lookup), piano Free e Premium a 9,99 $/mese, doublegram.com.
 Linee guida del team (fatti verificati):
@@ -419,6 +641,9 @@ Regole:
 - Non inventare fatti, numeri o fonti: se non lo sai e non puoi verificarlo, dillo con garbo.
 - Agisci solo nel gruppo: non puoi scrivere in privato a nessuno e non devi provarci.
 - Se hai usato uno strumento che manda qualcosa nel gruppo, nella risposta dillo in una riga, senza ripetere il contenuto.
+- Quello che ti chiedono lo fai direttamente; quello che proponi tu di tua iniziativa (un compito, un promemoria,
+  un sondaggio) passa da chiedi_approvazione, così decide il team con un 👍.
+- Per una domanda sul passato ("cosa avevamo deciso…", "quando ne abbiamo parlato") usa cerca_memoria prima di rispondere.
 - I dati di Doublegram (dati_doublegram, assistenza_doublegram) sono SIMULATI: quando li usi dillo sempre ("dati
   simulati"). Con i numeri ragiona da CFO e da responsabile dell'assistenza: confronta i periodi, collega le cause
   (es. ticket, tempi di risposta, soddisfazione e disdette), proponi azioni concrete e misurabili.
@@ -471,7 +696,7 @@ export async function chiediSchiavo(
   const fallback = /^claude-(fable-5|mythos-5|opus-5|sonnet-5-5)/.test(modello) && config.CLAUDE_FALLBACK === "default";
   let risposta: Anthropic.Beta.BetaMessage | undefined;
   for (let giro = 0; giro < MAX_GIRI; giro++) {
-    risposta = await client.beta.messages.create({
+    const flusso = client.beta.messages.stream({
       model: modello,
       max_tokens: 16000,
       system: [
@@ -482,6 +707,21 @@ export async function chiediSchiavo(
       output_config: { effort: "medium" },
       ...(fallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
     });
+    // Avanzamento in diretta: ricerche web e pagine lette appena il blocco è completo.
+    if (ctx.progresso) {
+      const progresso = ctx.progresso;
+      let scrive = false;
+      flusso.on("streamEvent", (evento, istantanea) => {
+        if (evento.type === "content_block_stop") {
+          const b = istantanea.content[evento.index];
+          if (b?.type === "server_tool_use") progresso.passo(descriviPasso(b.name, (b.input ?? {}) as Record<string, unknown>));
+        } else if (evento.type === "content_block_start" && evento.content_block.type === "text" && !scrive && giro > 0) {
+          scrive = true;
+          progresso.passo("✍️ Scrivo la risposta");
+        }
+      });
+    }
+    risposta = await flusso.finalMessage();
     for (const blocco of risposta.content) {
       if ((blocco.type === "web_search_tool_result" || blocco.type === "web_fetch_tool_result") && !Array.isArray(blocco.content)) {
         const errore = (blocco.content as { error_code?: string }).error_code;
@@ -500,6 +740,7 @@ export async function chiediSchiavo(
       let esito: string;
       let errore = false;
       try {
+        ctx.progresso?.passo(descriviPasso(blocco.name, (blocco.input ?? {}) as Record<string, unknown>));
         esito = await eseguiStrumento(ctx, blocco.name, (blocco.input ?? {}) as Record<string, unknown>);
         log.info(`Schiavo: ${blocco.name}`);
       } catch (e) {
@@ -576,14 +817,22 @@ export async function rispondiSchiavo(
   ctx: { config: Config; log: Logger; openwa: ConfigOpenWA },
   testo: string,
   scambi: Scambio[],
-  opzioni: { rispondiA?: string; aVoce?: boolean; prefisso?: string } = {},
+  opzioni: { rispondiA?: string; aVoce?: boolean; prefisso?: string; progresso?: Progresso; fissa?: boolean } = {},
 ): Promise<void> {
   const { config, log, openwa } = ctx;
   const cita = opzioni.rispondiA ? { quotedMessageId: opzioni.rispondiA } : {};
+  let progresso = opzioni.progresso;
   const testoTesto = async (t: string, conCitazione = true) => {
     const messaggio = `${opzioni.prefisso ?? "🎩"} ${t}`;
-    const id = await inviaTesto(openwa, messaggio, conCitazione ? cita : {}).catch(() => inviaTesto(openwa, messaggio));
+    // Il messaggio di avanzamento diventa la risposta (una volta sola).
+    const id = progresso
+      ? await progresso.fine(messaggio)
+      : await inviaTesto(openwa, messaggio, conCitazione ? cita : {}).catch(() => inviaTesto(openwa, messaggio));
+    progresso = undefined;
     registra(id, messaggio, scambi);
+    // In memoria la risposta vera (il messaggio è nato come "Un istante…" ed è stato modificato).
+    if (id) memorizza(config, { id, data: new Date().toISOString(), autore: "Jarvis", testo: messaggio });
+    if (opzioni.fissa && id) await fissaMessaggio(openwa, id);
   };
   const vocale = async (t: string, conCitazione: boolean) => {
     const ogg = await sintetizza(config, t);
@@ -601,6 +850,8 @@ export async function rispondiSchiavo(
     const [detto, scritto] = dividi(testo, "SCRITTO");
     try {
       await vocale(detto, true);
+      await progresso?.elimina();
+      progresso = undefined;
       if (scritto) await testoTesto(scritto, false);
       return;
     } catch (e) {
@@ -625,11 +876,16 @@ const RICHIESTA_BRIEFING = "È l'ora del briefing del mattino: preparalo per il 
 
 /** Il briefing: scritto, con la versione parlata in un vocale se BRIEFING_VOCE=true. */
 export async function eseguiBriefing(ctx: { config: Config; log: Logger; openwa: ConfigOpenWA }, rispondiA?: string): Promise<void> {
-  const { risposta, scambi } = await chiediSchiavo({ ...ctx, chi: "nessuno: è il briefing automatico per tutto il team" }, RICHIESTA_BRIEFING, {
-    modo: "briefing",
-  });
+  const progresso = new Progresso(ctx.openwa, "☀️🎩 Preparo il briefing del mattino…", rispondiA);
+  await progresso.inizia();
+  const { risposta, scambi } = await chiediSchiavo(
+    { ...ctx, chi: "nessuno: è il briefing automatico per tutto il team", progresso },
+    RICHIESTA_BRIEFING,
+    { modo: "briefing" },
+  );
   const testo = ctx.config.BRIEFING_VOCE === "true" ? risposta : dividi(risposta, "VOCE")[0];
-  await rispondiSchiavo(ctx, testo, scambi, { rispondiA, prefisso: "☀️🎩" });
+  // Il briefing resta fissato in cima al gruppo per 24 ore.
+  await rispondiSchiavo(ctx, testo, scambi, { rispondiA, prefisso: "☀️🎩", progresso, fissa: true });
   ctx.log.info("Schiavo: briefing inviato");
 }
 
@@ -647,6 +903,52 @@ export async function controllaBriefing(ctx: { config: Config; log: Logger; open
   stato.ultimoBriefing = oggiLocale; // segnato prima: se fallisce non riprova a raffica
   salvaStato(stato);
   await eseguiBriefing(ctx);
+}
+
+// ---------- Monitoraggio proattivo ----------
+
+/** Da chiamare ogni minuto: agli orari MONITOR_ORARI fa un giro di controllo e scrive solo se c'è qualcosa. */
+export async function controllaMonitor(ctx: { config: Config; log: Logger; openwa: ConfigOpenWA }): Promise<void> {
+  if (ctx.config.MONITOR_ORARI === "off") return;
+  const ora = new Date();
+  const minuti = ora.getHours() * 60 + ora.getMinutes();
+  const giorno = `${ora.getFullYear()}-${String(ora.getMonth() + 1).padStart(2, "0")}-${String(ora.getDate()).padStart(2, "0")}`;
+  const turno = ctx.config.MONITOR_ORARI.split(",")
+    .map((t) => t.trim())
+    .find((t) => {
+      const [h, m] = t.split(":").map(Number);
+      const obiettivo = (h ?? 0) * 60 + (m ?? 0);
+      return minuti >= obiettivo && minuti <= obiettivo + 60;
+    });
+  if (!turno) return;
+  const chiave = `${giorno} ${turno}`;
+  const stato = caricaStato();
+  if (stato.monitorFatti?.includes(chiave)) return;
+  stato.monitorFatti = [...(stato.monitorFatti ?? []), chiave].slice(-20);
+  salvaStato(stato);
+  await eseguiMonitor(ctx);
+}
+
+export async function eseguiMonitor(ctx: { config: Config; log: Logger; openwa: ConfigOpenWA }): Promise<void> {
+  const stato = caricaStato();
+  const dossier = fs.existsSync(path.join(ctx.config.SHARED_DIR, "06-clienti"))
+    ? fs.readdirSync(path.join(ctx.config.SHARED_DIR, "06-clienti")).filter((f) => f.endsWith(".md")).slice(-10)
+    : [];
+  const richiestaMonitor = [
+    "Turno di monitoraggio.",
+    `Aziende dei dossier clienti: ${dossier.length ? dossier.map((f) => f.replace(/^\d{4}-\d{2}-\d{2}_/, "").replace(/\.md$/, "")).join(", ") : "nessuna"}.`,
+    `Già segnalato in passato (non ripeterlo):\n${(stato.segnalati ?? []).slice(-30).map((s) => `- ${s}`).join("\n") || "- niente"}`,
+  ].join("\n\n");
+  const { risposta, scambi } = await chiediSchiavo({ ...ctx, chi: "nessuno: è il monitoraggio automatico" }, richiestaMonitor, { modo: "monitor" });
+  if (/^\W*NIENTE\W*$/i.test(risposta.trim()) || risposta.trim().length < 30) {
+    ctx.log.info("Monitoraggio: niente da segnalare");
+    return;
+  }
+  await rispondiSchiavo(ctx, risposta, scambi, { prefisso: "🔔🎩" });
+  const s2 = caricaStato();
+  s2.segnalati = [...(s2.segnalati ?? []), `${oggi()}: ${risposta.replace(/\s+/g, " ").slice(0, 160)}`].slice(-40);
+  salvaStato(s2);
+  ctx.log.info("Monitoraggio: segnalazione inviata");
 }
 
 /** Manda i promemoria scaduti. Da chiamare periodicamente dal servizio. */

@@ -5,6 +5,7 @@ import { chiediJson, creaClient } from "./claude.js";
 import { DATI_DIR, type Config } from "./config.js";
 import { creaCard } from "./grafica.js";
 import type { Logger } from "./log.js";
+import { registraProposta } from "./approvazioni.js";
 import { inviaImmagine, inviaTesto, type ConfigOpenWA } from "./openwa.js";
 import { leggiLineeGuida } from "./pipeline.js";
 import { inizioTesto, oggi, slug } from "./testo.js";
@@ -196,7 +197,9 @@ export async function lavoraPost(
   const idCard = await inviaImmagine(openwa, card);
   const testo = esito.testo_post.trim();
   const idTesto = await inviaTesto(openwa, testo);
-  const nota = "✏️ Per modificarlo rispondi citando la card o il testo (es. \"più corto\", \"cambia titolo in …\", \"in italiano\").";
+  const nota =
+    "✏️ Per modificarlo rispondi citando la card o il testo (es. \"più corto\", \"cambia titolo in …\", \"in italiano\").\n👍 sul testo per approvarlo.";
+  if (idTesto) registraProposta(idTesto, "pubblica_post", `Post: ${esito.titolo_immagine}`, { file: base }, testo);
   await inviaTesto(openwa, nota).catch(() => undefined);
   registra(corrente, idCard, "");
   registra(corrente, idTesto, testo);

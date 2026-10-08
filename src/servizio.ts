@@ -5,10 +5,13 @@ import http from "node:http";
 import path from "node:path";
 import { gestisciMessaggio, type MessaggioRicevuto } from "./comandi.js";
 import { gestisciDoublegram } from "./doublegram.js";
-import { controllaBriefing, controllaPromemoria } from "./schiavo.js";
+import { gestisciReazione } from "./approvazioni.js";
+import { importaStorico, impostaTitolare, memorizza, nomeTitolare, puliziaMemoria, ricordaNome } from "./memoria.js";
+import { reazioneQuiz } from "./quiz.js";
+import { controllaBriefing, controllaMonitor, controllaPromemoria } from "./schiavo.js";
 import { caricaConfig, DATI_DIR, PROJECT_DIR, verificaSeparazioneCartelle, type Config } from "./config.js";
 import { creaLogger, descriviErrore } from "./log.js";
-import { citazioneDaStorico, configOpenWA, inviatoDaQui } from "./openwa.js";
+import { citazioneDaStorico, configOpenWA, inviatoDaQui, registraWebhook, richiesta } from "./openwa.js";
 import { oggi } from "./testo.js";
 
 /**
@@ -183,6 +186,15 @@ function avviaServer(config: Config): http.Server {
       // Rispondo subito: OpenWA non deve aspettare Claude (e ritenterebbe la consegna).
       rispondi(200, { ricevuto: true });
 
+      // Reazioni: risposte del quiz e approvazioni con 👍. Fuori dalla coda: devono essere immediate.
+      if (evento.event === "message.reaction" && evento.data) {
+        const r = evento.data as unknown as { messageId?: string; chatId?: string; reaction?: string; senderId?: string };
+        const openwaR = configOpenWA(config);
+        if (r.chatId && r.chatId !== openwaR.gruppo) return;
+        if (reazioneQuiz(r)) return;
+        void gestisciReazione({ config, log, openwa: openwaR }, r).catch((e) => log.errore(`Reazione: ${descriviErrore(e)}`));
+        return;
+      }
       if ((evento.event !== "message.received" && evento.event !== "message.sent") || !evento.data) return;
       const chiave =
         (req.headers["x-openwa-idempotency-key"] as string | undefined) ?? evento.idempotencyKey ?? evento.data.id ?? "";
@@ -203,6 +215,21 @@ function avviaServer(config: Config): http.Server {
           messaggio.quotedMessage = await citazioneDaStorico(openwa, chat, messaggio.id).catch((e) => {
             log.avviso(`Citazione non letta dallo storico: ${descriviErrore(e)}`);
             return undefined;
+          });
+        }
+        // Memoria del gruppo (cifrata): ogni messaggio, con il nome di chi scrive.
+        if (chat === openwa.gruppo && messaggio.id) {
+          const corpoMsg = (messaggio.body ?? "").trim();
+          const nome = messaggio.contact?.name ?? messaggio.contact?.pushName;
+          if (!messaggio.fromMe) ricordaNome(messaggio.author, nome);
+          const daJarvis = messaggio.fromMe && corpoMsg !== "" && inviatoDaQui(corpoMsg);
+          const ts = messaggio.timestamp;
+          memorizza(config, {
+            id: messaggio.id,
+            data: (ts ? new Date(ts * 1000) : new Date()).toISOString(),
+            autore: daJarvis ? "Jarvis" : messaggio.fromMe ? nomeTitolare() : (nome ?? messaggio.author ?? "?"),
+            testo: corpoMsg || `[${messaggio.type ?? "messaggio"}]`,
+            tipo: messaggio.type,
           });
         }
         // Prima i bot Doublegram (comandi /…, vocali, Security); se non lo riguardano, il motore LinkedIn.
@@ -227,6 +254,26 @@ function avviaServer(config: Config): http.Server {
   return server;
 }
 
+/**
+ * All'avvio: webhook aggiornato con gli eventi che servono (anche message.reaction), nome del titolare del
+ * numero e, la prima volta, l'importazione dei messaggi già presenti nel gruppo nella memoria.
+ */
+async function avvioDoublegram(config: Config, openwa: ReturnType<typeof configOpenWA>): Promise<void> {
+  if (config.WEBHOOK_URL && config.OPENWA_WEBHOOK_SECRET) {
+    await registraWebhook(openwa, config.WEBHOOK_URL, config.OPENWA_WEBHOOK_SECRET)
+      .then((e) => log.info(`Webhook ${e} (messaggi e reazioni del gruppo)`))
+      .catch((e) => log.avviso(`Webhook non aggiornato: ${descriviErrore(e)}`));
+  }
+  try {
+    const sessione = (await richiesta(openwa, "GET", "")) as { phone?: string | null; pushName?: string | null } | null;
+    impostaTitolare(sessione?.phone, sessione?.pushName);
+  } catch {
+    /* OpenWA non ancora pronto: resta "Titolare del numero" */
+  }
+  await importaStorico(config, openwa, log);
+  puliziaMemoria(config, log);
+}
+
 function main(): void {
   const config = caricaConfig();
   verificaSeparazioneCartelle(config.SHARED_DIR);
@@ -238,11 +285,13 @@ function main(): void {
   if (config.DOUBLEGRAM_BOT === "true") {
     const openwa = configOpenWA(config);
     setInterval(() => void controllaPromemoria(openwa, log).catch((e) => log.errore(`Promemoria: ${descriviErrore(e)}`)), 30_000).unref();
-    // Briefing del mattino: nella coda dei lavori, così non si accavalla con altro.
-    setInterval(
-      () => inCoda("briefing", () => controllaBriefing({ config, log, openwa }).catch((e) => log.errore(`Briefing: ${descriviErrore(e)}`))),
-      60_000,
-    ).unref();
+    // Briefing del mattino e monitoraggio: nella coda dei lavori, così non si accavallano con altro.
+    setInterval(() => {
+      inCoda("briefing", () => controllaBriefing({ config, log, openwa }).catch((e) => log.errore(`Briefing: ${descriviErrore(e)}`)));
+      inCoda("monitoraggio", () => controllaMonitor({ config, log, openwa }).catch((e) => log.errore(`Monitoraggio: ${descriviErrore(e)}`)));
+    }, 60_000).unref();
+    setInterval(() => puliziaMemoria(config, log), 3_600_000).unref();
+    void avvioDoublegram(config, openwa);
   }
 
   const chiudi = () => {

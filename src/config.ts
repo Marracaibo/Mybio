@@ -62,6 +62,17 @@ const EnvSchema = z.object({
   BRIEFING_ORARIO: z.preprocess(vuotoComeAssente, z.string().regex(/^(off|\d{1,2}:\d{2})$/).default("08:45")),
   /** true: il briefing arriva anche come vocale. */
   BRIEFING_VOCE: z.preprocess(vuotoComeAssente, z.enum(["true", "false"]).default("true")),
+  /** Memoria cifrata del gruppo (tutti i messaggi e i vocali trascritti) per il maggiordomo. */
+  MEMORIA: z.preprocess(vuotoComeAssente, z.enum(["on", "off"]).default("on")),
+  /** Chiave della memoria (qualsiasi stringa lunga e casuale). Senza, se ne genera una sul server. */
+  MEMORIA_CHIAVE: z.preprocess(vuotoComeAssente, z.string().min(16, "almeno 16 caratteri").optional()),
+  MEMORIA_GIORNI: z.preprocess(vuotoComeAssente, z.coerce.number().int().positive().default(365)),
+  /** Monitoraggio proattivo: orari HH:MM separati da virgola, o "off". Scrive solo se trova qualcosa di importante. */
+  MONITOR_ORARI: z.preprocess(vuotoComeAssente, z.string().regex(/^(off|\d{1,2}:\d{2}(,\s*\d{1,2}:\d{2})*)$/).default("11:30,17:30")),
+  /** Modello per i file (PowerPoint, Excel, Word, PDF) e per gli agenti della ricerca approfondita. */
+  CLAUDE_MODEL_FILE: z.preprocess(vuotoComeAssente, z.string().default("claude-sonnet-5-5")),
+  /** Ricerche approfondite al giorno (ognuna costa qualche dollaro di API). */
+  RICERCHE_MAX_GIORNO: z.preprocess(vuotoComeAssente, z.coerce.number().int().min(0).default(3)),
   /** Dati di Doublegram per il maggiordomo: "simulati" (finti ma coerenti) o "off". */
   DATI_DOUBLEGRAM: z.preprocess(vuotoComeAssente, z.enum(["simulati", "off"]).default("simulati")),
   PIANIFICAZIONE_INTERNA: z.preprocess(vuotoComeAssente, z.enum(["true", "false"]).default("true")),
