@@ -69,8 +69,41 @@ export async function inviaTesto(
   const corpo: Record<string, string | boolean> = { chatId: cfg.gruppo, text: testo, linkPreview: false };
   if (opzioni.quotedMessageId) corpo["quotedMessageId"] = opzioni.quotedMessageId;
   const risposta = await richiesta(cfg, "POST", "/messages/send-text", corpo);
+  ricordaInviato(testo);
   const id = (risposta as { messageId?: unknown } | null)?.messageId;
   return typeof id === "string" ? id : undefined;
+}
+
+/** Inizio dei testi spediti da questo processo: col numero personale tornano indietro come message.sent. */
+const inviatiDiRecente: string[] = [];
+const inizioInviato = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, 120);
+function ricordaInviato(testo: string): void {
+  inviatiDiRecente.push(inizioInviato(testo));
+  if (inviatiDiRecente.length > 200) inviatiDiRecente.shift();
+}
+export function inviatoDaQui(testo: string): boolean {
+  return inviatiDiRecente.includes(inizioInviato(testo));
+}
+
+/**
+ * Il messaggio citato da un proprio messaggio. Con il numero personale le risposte scritte dal telefono
+ * arrivano come message.sent, e OpenWA (whatsapp-web.js) non vi mette la citazione: la leggo dallo storico
+ * della chat, che invece la risolve.
+ */
+export async function citazioneDaStorico(
+  cfg: ConfigOpenWA,
+  chatId: string,
+  messageId: string,
+): Promise<{ id?: string; body?: string } | undefined> {
+  for (let tentativo = 0; tentativo < 3; tentativo++) {
+    const storico = (await richiesta(cfg, "GET", `/messages/${encodeURIComponent(chatId)}/history?limit=15`)) as
+      | Array<{ id?: string; quotedMessage?: { id?: string; body?: string } }>
+      | null;
+    const trovato = Array.isArray(storico) ? storico.find((m) => m.id === messageId) : undefined;
+    if (trovato) return trovato.quotedMessage;
+    await attendi(1500);
+  }
+  return undefined;
 }
 
 const attendi = (ms: number) => new Promise((r) => setTimeout(r, ms));

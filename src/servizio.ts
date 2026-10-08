@@ -7,7 +7,7 @@ import { gestisciMessaggio, type MessaggioRicevuto } from "./comandi.js";
 import { gestisciDoublegram } from "./doublegram.js";
 import { caricaConfig, DATI_DIR, PROJECT_DIR, verificaSeparazioneCartelle, type Config } from "./config.js";
 import { creaLogger, descriviErrore } from "./log.js";
-import { configOpenWA } from "./openwa.js";
+import { citazioneDaStorico, configOpenWA, inviatoDaQui } from "./openwa.js";
 import { oggi } from "./testo.js";
 
 /**
@@ -187,6 +187,23 @@ function avviaServer(config: Config): http.Server {
         (req.headers["x-openwa-idempotency-key"] as string | undefined) ?? evento.idempotencyKey ?? evento.data.id ?? "";
       const messaggio = evento.data;
       inCoda("comando", async () => {
+        // Risposte citate scritte dal numero collegato: la citazione va letta dallo storico (vedi citazioneDaStorico).
+        const openwa = configOpenWA(config);
+        const chat = messaggio.chatId ?? messaggio.from;
+        if (
+          messaggio.fromMe &&
+          !messaggio.quotedMessage &&
+          messaggio.id &&
+          chat === openwa.gruppo &&
+          (messaggio.body ?? "").trim() &&
+          !(messaggio.body ?? "").trim().startsWith("/") &&
+          !inviatoDaQui(messaggio.body ?? "")
+        ) {
+          messaggio.quotedMessage = await citazioneDaStorico(openwa, chat, messaggio.id).catch((e) => {
+            log.avviso(`Citazione non letta dallo storico: ${descriviErrore(e)}`);
+            return undefined;
+          });
+        }
         // Prima i bot Doublegram (comandi /…, vocali, Security); se non lo riguardano, il motore LinkedIn.
         if (await gestisciDoublegram({ config, log }, messaggio, chiave)) return;
         const dopo = await gestisciMessaggio({ config, log }, messaggio, chiave);
