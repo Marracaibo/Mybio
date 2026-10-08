@@ -18,12 +18,21 @@ al suo posto il sistema scrive [DATO DA INSERIRE].
 
 _Non è il profilo di un fondatore: niente storie da founder, raccolte fondi, vita privata._
 
-## 2. Pubblico
+## 2. Temi
+
+- Principale: community Telegram (crescita, spam e raid, engagement, moderazione, monetizzazione, supporto).
+- Anche: crescita di community e creator in generale; vendita B2B e trattative (è il suo lavoro);
+  startup e lavoro con i soci; AI e automazione del lavoro ripetitivo; comunicazione e leadership.
+- Mai: vita privata, politica, investimenti e consigli finanziari.
+
+## 3. Pubblico
 
 - Admin e owner di community Telegram
 - Progetti crypto e Web3
 - Creator che monetizzano su Telegram
 - Aziende che usano Telegram per il supporto clienti
+- Founder di startup e PMI digitali
+- Chi lavora nella vendita B2B
 
 Problemi che hanno (da cui partire per i post):
 - crescita: trovare nuovi membri reali
@@ -33,7 +42,7 @@ Problemi che hanno (da cui partire per i post):
 - monetizzazione: abbonamenti, contenuti a pagamento, shop
 - supporto clienti su Telegram che non scala
 
-## 3. Tono
+## 4. Tono
 
 - Diretto, concreto, da professionista che parla ogni giorno con admin di community.
 - Niente toni da guru, niente promesse facili ("10x in 30 giorni"), niente motivazionale.
@@ -41,14 +50,14 @@ Problemi che hanno (da cui partire per i post):
 - Italiano naturale: niente anglicismi quando esiste la parola italiana (si può dire "community", "bot", "admin").
 - Massimo 3 emoji per post.
 
-## 4. Fatti verificati su Doublegram
+## 5. Fatti verificati su Doublegram
 
 - Doublegram automatizza il lavoro ripetitivo, così puoi concentrarti sulla tua community.
 
 Non ci sono ancora altri fatti verificati (prodotti e cosa fanno, numeri, clienti citabili, sito):
 finché non vengono aggiunti qui, il sistema non li usa e scrive [DATO DA INSERIRE].
 
-## 5. Cose da NON dire
+## 6. Cose da NON dire
 
 - Non inventare numeri, clienti, risultati o funzionalità.
 - Non promettere risultati garantiti (crescita, guadagni, rendimenti).
@@ -56,7 +65,7 @@ finché non vengono aggiunti qui, il sistema non li usa e scrive [DATO DA INSERI
 - Non parlare male di concorrenti per nome.
 - Non chiudere con "scrivimi in DM per comprare" o simili.
 
-## 6. Esempi di post approvati
+## 7. Esempi di post approvati
 
 Ancora nessuno. Quando Roberto avrà pubblicato o approvato 2-3 post, incollali qui:
 servono come riferimento di tono e lunghezza.

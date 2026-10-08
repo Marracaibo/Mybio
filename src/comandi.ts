@@ -2,9 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { componiBozza, leggiBozza } from "./bozza.js";
 import { creaClient } from "./claude.js";
+import { percorsoLibero } from "./cartelle.js";
 import { CARTELLE, type Config } from "./config.js";
+import { htmlInTesto } from "./feed.js";
 import { descriviErrore, type Logger } from "./log.js";
-import { configOpenWA, inviaTesto } from "./openwa.js";
+import { configOpenWA, inviaTesto, scaricaMedia, type ConfigOpenWA } from "./openwa.js";
 import {
   caricaSorgente,
   leggiLineeGuida,
@@ -16,13 +18,15 @@ import {
 import { caricaStato, caricaStatoComandi, salvaStatoComandi, type MessaggioInviato } from "./stato.js";
 import { inizioTesto, oggi, testoSemplice } from "./testo.js";
 
-/** Il messaggio che arriva da OpenWA con l'evento message.received (solo i campi che usiamo). */
+/** Il messaggio che arriva da OpenWA con gli eventi message.received / message.sent (solo i campi che usiamo). */
 export interface MessaggioRicevuto {
   id?: string;
   chatId?: string;
   from?: string;
   body?: string;
   fromMe?: boolean;
+  type?: string;
+  media?: { mimetype?: string; data?: string; omitted?: boolean };
   quotedMessage?: { id?: string; body?: string };
 }
 
@@ -57,6 +61,11 @@ export const AIUTO = [
   "- senza emoji",
   "- rifai: <istruzione libera>",
   "Aggiungi \"variante B\" per modificare la B. Le risposte non contano nel limite dei 3 messaggi al giorno.",
+  "",
+  "Per proporre un post da adattare scrivi nel gruppo (senza citare niente):",
+  "- uno screenshot del post con didascalia: adatta",
+  "- adatta: <testo del post incollato>",
+  "- adatta <link a un articolo o newsletter> (LinkedIn no: lì serve lo screenshot)",
 ].join("\n");
 
 export function interpretaComando(testo: string): Comando | undefined {
@@ -109,6 +118,65 @@ function trovaBozza(sharedDir: string, nome: string): string | undefined {
   return undefined;
 }
 
+const INIZIO_ADATTA = /^\s*adatta\b\s*:?\s*/i;
+const ESTENSIONI_IMMAGINE: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+
+/**
+ * "adatta" nel gruppo: salva in 01-da-adattare/ uno screenshot, un testo incollato o un articolo
+ * scaricato da un link. Restituisce il messaggio di risposta per il gruppo.
+ */
+async function aggiungiFonte(config: Config, openwa: ConfigOpenWA, msg: MessaggioRicevuto, chat: string): Promise<string> {
+  const resto = (msg.body ?? "").replace(INIZIO_ADATTA, "").trim();
+  const cartella = path.join(config.SHARED_DIR, CARTELLE.daAdattare);
+  fs.mkdirSync(cartella, { recursive: true });
+  const base = `whatsapp_${oggi()}_${Date.now()}`;
+  const conferma = `✅ Aggiunto alle fonti: diventa una bozza al prossimo giro delle ${config.ORARIO_ADATTA}.`;
+
+  const mime = msg.media?.mimetype ?? "";
+  if (msg.type === "image" || mime.startsWith("image/")) {
+    const ext = ESTENSIONI_IMMAGINE[mime];
+    if (!ext) return `Formato immagine non supportato (${mime || "sconosciuto"}): manda uno screenshot PNG o JPG.`;
+    const dati =
+      msg.media?.data && !msg.media.omitted
+        ? Buffer.from(msg.media.data, "base64")
+        : msg.id
+          ? await scaricaMedia(openwa, chat, msg.id)
+          : undefined;
+    if (!dati?.length) return "Non riesco a scaricare l'immagine: riprova a mandarla.";
+    if (dati.length > 5 * 1024 * 1024) return "Immagine troppo grande (massimo 5 MB): manda uno screenshot normale.";
+    fs.writeFileSync(percorsoLibero(cartella, `${base}.${ext}`), dati);
+    return conferma;
+  }
+
+  const link = /^<?(https?:\/\/\S+?)>?$/.exec(resto)?.[1];
+  if (link) {
+    if (/(^|\.)linkedin\.com$/i.test(new URL(link).hostname)) {
+      return "LinkedIn non si può leggere in automatico: manda uno screenshot del post con didascalia \"adatta\", oppure incolla il testo dopo \"adatta:\".";
+    }
+    const risposta = await fetch(link, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; doublegram-linkedin-engine)" },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!risposta.ok) return `Non riesco ad aprire il link (errore ${risposta.status}).`;
+    const html = await risposta.text();
+    const corpo = /<article[\s\S]*?<\/article>/i.exec(html)?.[0] ?? /<body[\s\S]*<\/body>/i.exec(html)?.[0] ?? html;
+    const titolo = htmlInTesto(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? "").trim();
+    let testo = htmlInTesto(corpo.replace(/<(script|style|nav|footer|header|aside)[\s\S]*?<\/\1>/gi, " ")).trim();
+    if (testo.length < 300) return "Dal link non ho ricavato un testo utilizzabile: incolla il testo dopo \"adatta:\".";
+    if (testo.length > config.RSS_MAX_CARATTERI) testo = testo.slice(0, config.RSS_MAX_CARATTERI) + "\n\n[articolo tagliato]";
+    const intestazione = [`link: ${link}`, "tipo: newsletter", "---", titolo].filter(Boolean).join("\n");
+    fs.writeFileSync(percorsoLibero(cartella, `${base}.md`), `${intestazione}\n\n${testo}\n`, "utf8");
+    return conferma;
+  }
+
+  if (resto.length >= 80) {
+    // Il testo può iniziare con "autore: Nome" e "link: …" (vedi leggiTestoSorgente).
+    fs.writeFileSync(percorsoLibero(cartella, `${base}.txt`), resto + "\n", "utf8");
+    return conferma;
+  }
+  return "Dopo \"adatta\" metti uno screenshot, un link a un articolo o il testo del post (almeno qualche riga).";
+}
+
 export interface ServizioComandi {
   config: Config;
   log: Logger;
@@ -122,11 +190,42 @@ export async function gestisciMessaggio(srv: ServizioComandi, msg: MessaggioRice
   const { config, log } = srv;
   const openwa = configOpenWA(config);
   const chat = msg.chatId ?? msg.from;
-  if (msg.fromMe || chat !== openwa.gruppo || !msg.quotedMessage || !msg.body) return;
+  if (chat !== openwa.gruppo) return;
 
   const statoComandi = caricaStatoComandi();
   if (statoComandi.elaborati.includes(chiave)) return; // consegna duplicata
   const registri = [caricaStato().messaggi, statoComandi.messaggi];
+
+  // Con il numero personale arrivano (come message.sent) anche i messaggi spediti dal motore stesso:
+  // quelli che coincidono con un testo inviato dal sistema vanno ignorati, per non reagire a sé stessi.
+  if (msg.fromMe && msg.body) {
+    const inizio = inizioTesto(msg.body);
+    if (registri.some((r) => Object.values(r).some((m) => m.inizio && m.inizio === inizio))) return;
+  }
+
+  if (!msg.quotedMessage && INIZIO_ADATTA.test(msg.body ?? "")) {
+    const giorno = oggi();
+    if ((statoComandi.perGiorno[giorno] ?? 0) >= config.COMANDI_MAX_GIORNO) {
+      log.avviso(`Tetto di ${config.COMANDI_MAX_GIORNO} comandi al giorno raggiunto: ignoro una nuova fonte`);
+      return;
+    }
+    statoComandi.elaborati.push(chiave);
+    statoComandi.perGiorno[giorno] = (statoComandi.perGiorno[giorno] ?? 0) + 1;
+    salvaStatoComandi(statoComandi);
+    let risposta: string;
+    try {
+      risposta = await aggiungiFonte(config, openwa, msg, chat);
+    } catch (e) {
+      risposta = `Non sono riuscito ad aggiungere la fonte (${descriviErrore(e)}).`;
+    }
+    log.info(`Fonte dal gruppo: ${risposta}`);
+    await inviaTesto(openwa, risposta, msg.id ? { quotedMessageId: msg.id } : {}).catch(async () => {
+      await inviaTesto(openwa, risposta);
+    });
+    return;
+  }
+
+  if (!msg.quotedMessage || !msg.body) return;
   const riferimento = trovaRiferimento(msg.quotedMessage, registri);
   if (!riferimento) return;
 

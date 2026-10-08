@@ -358,6 +358,10 @@ Aggiornamenti: `git pull && cd deploy && docker compose up -d --build`. Per Open
 
    - oppure uno screenshot `.png`, `.jpg` o `.webp` del post (massimo 5 MB).
 
+   - oppure, **dal gruppo WhatsApp** (con `npm run servizio` attivo, senza citare messaggi): uno screenshot con
+     didascalia `adatta`, oppure `adatta: <testo del post>`, oppure `adatta <link a un articolo>`. Il motore lo salva in
+     `01-da-adattare/` e risponde nel gruppo. I link a LinkedIn vengono rifiutati: per quelli serve lo screenshot.
+
    In più, alle 07:00 `rss` aggiunge da solo gli articoli nuovi delle newsletter elencate in `fonti.txt`
    (un feed per riga, facoltativo un nome davanti: `Justin Welsh | https://….substack.com/feed`).
 2. Alle 07:30 `adatta` crea le bozze in `02-bozze/`. Puoi anche lanciarlo a mano: `npm run adatta`.

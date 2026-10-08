@@ -109,6 +109,14 @@ export async function preparaSessione(cfg: ConfigOpenWA, opzioni: { forza?: bool
   return true;
 }
 
+/** Scarica il file allegato a un messaggio (quando il webhook non lo porta già dentro). */
+export async function scaricaMedia(cfg: ConfigOpenWA, chatId: string, messageId: string): Promise<Buffer> {
+  const url = `${cfg.url}/api/sessions/${encodeURIComponent(cfg.sessione)}/messages/${encodeURIComponent(chatId)}/${encodeURIComponent(messageId)}/media`;
+  const risposta = await fetch(url, { headers: { "X-API-Key": cfg.apiKey }, signal: AbortSignal.timeout(60_000) });
+  if (!risposta.ok) throw new Error(`OpenWA ha risposto ${risposta.status} scaricando l'allegato`);
+  return Buffer.from(await risposta.arrayBuffer());
+}
+
 export async function elencaGruppi(cfg: ConfigOpenWA): Promise<unknown> {
   return richiesta(cfg, "GET", "/groups");
 }
@@ -120,7 +128,9 @@ export async function elencaGruppi(cfg: ConfigOpenWA): Promise<unknown> {
 export async function registraWebhook(cfg: ConfigOpenWA, url: string, secret: string): Promise<"creato" | "aggiornato"> {
   const corpo = {
     url,
-    events: ["message.received"],
+    // message.sent: con il numero personale i messaggi scritti dal telefono collegato sono "inviati",
+    // non "ricevuti"; senza, i comandi e le fonti mandate da chi ha collegato il numero non arrivano.
+    events: ["message.received", "message.sent"],
     secret,
     filters: { conditions: [{ field: "chatId", operator: "is", value: [cfg.gruppo] }] },
     retryCount: 3,

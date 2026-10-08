@@ -13,8 +13,18 @@ Carrie Melissa Jones | https://www.carriemelissajones.com/blog?format=rss
 # Creator: crescita del pubblico e monetizzazione
 Jay Clouse - Creator Science | https://creatorscience.com/feed/
 
-# Vendita B2B pratica
+# Vendita B2B
 Close | https://www.close.com/blog/rss.xml
+Belal Batrawy - Death to Fluff | https://deathtofluff.substack.com/feed
+April Dunford | https://aprildunford.substack.com/feed
+
+# Creator molto seguiti su LinkedIn: crescita, comunicazione, AI
+Elena Verna | https://www.elenaverna.com/feed
+Wes Kao | https://newsletter.weskao.com/feed
+Ruben Hassid - How to AI | https://ruben.substack.com/feed
+Kieran Flanagan | https://kieranflanagan.substack.com/feed
+Amanda Natividad | https://amandanat.substack.com/feed
+Adam Grant | https://adamgrant.substack.com/feed
 
 # Moderazione e trust & safety (più politica che pratica: togli il # se vuoi provarla)
 # Everything in Moderation | https://www.everythinginmoderation.co/rss/

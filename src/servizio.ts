@@ -19,7 +19,7 @@ import { oggi } from "./testo.js";
 
 const log = creaLogger("servizio");
 const PERCORSO_WEBHOOK = "/webhook/openwa";
-const MAX_CORPO = 2 * 1024 * 1024;
+const MAX_CORPO = 8 * 1024 * 1024; // gli screenshot arrivano dentro il webhook (base64)
 /** Se il servizio riparte dopo l'orario previsto, recupera il lavoro solo entro questa finestra. */
 const ORE_RECUPERO = 3;
 const FILE_PIANIFICAZIONE = path.join(DATI_DIR, ".servizio.json");
@@ -181,7 +181,7 @@ function avviaServer(config: Config): http.Server {
       // Rispondo subito: OpenWA non deve aspettare Claude (e ritenterebbe la consegna).
       rispondi(200, { ricevuto: true });
 
-      if (evento.event !== "message.received" || !evento.data) return;
+      if ((evento.event !== "message.received" && evento.event !== "message.sent") || !evento.data) return;
       const chiave =
         (req.headers["x-openwa-idempotency-key"] as string | undefined) ?? evento.idempotencyKey ?? evento.data.id ?? "";
       const messaggio = evento.data;

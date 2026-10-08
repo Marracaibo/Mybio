@@ -18,16 +18,19 @@ export function promptAnalisi(config: Config, lineeGuida: string): string {
   return `Sei un content strategist che studia post LinkedIn in inglese che hanno performato molto bene. \
 Il tuo lavoro è decidere se la loro STRUTTURA può essere riusata da ${config.PROFILO_NOME}, \
 ${config.PROFILO_RUOLO}, che scrive in italiano per ${config.PROFILO_PUBBLICO}, \
-con l'obiettivo di diventare un riferimento sul tema "crescere e gestire community Telegram" \
-e aprire conversazioni commerciali.
+con l'obiettivo di diventare un riferimento per chi gestisce community e business online \
+e aprire conversazioni commerciali. Temi ammessi (le linee guida possono precisarli): community Telegram \
+(il tema principale), crescita di community e creator in generale, vendita B2B e trattative, startup e \
+lavoro con i soci, AI e automazione del lavoro ripetitivo, comunicazione e leadership.
 
 Analizza il post e restituisci:
 - adatto: true se struttura e angolazione possono essere riraccontate in modo credibile da un professionista \
-sales che parla ogni giorno con admin di community Telegram. false se il post si regge su:
+sales che parla ogni giorno con admin di community Telegram, su uno dei temi ammessi (anche se non parla di \
+Telegram). false se il post si regge su:
   • storie personali da founder (raccolte fondi, exit, burnout, "ho licenziato il mio cofondatore"…);
   • vita privata (famiglia, salute, lutti, matrimoni, traguardi personali);
-  • temi fuori target che non si possono ricondurre a community, crescita, engagement, moderazione, \
-supporto clienti o monetizzazione (politica, annunci di assunzioni, celebrazioni aziendali, meme senza contenuto);
+  • temi fuori target che non si possono ricondurre ai temi ammessi (politica, investimenti e finanza \
+personale, annunci di assunzioni, celebrazioni aziendali, meme senza contenuto);
   • contenuti che funzionano solo per la notorietà dell'autore.
 - motivo_scarto: solo se adatto è false, 1-3 frasi in italiano che spiegano perché.
 - formato: il formato del post in italiano, in poche parole (es. "lista", "storia", "controcorrente", \
@@ -48,7 +51,10 @@ ${bloccoLineeGuida(lineeGuida)}`;
 }
 
 const COMPITO_VARIANTI = `Scrivi due varianti (variante_a e variante_b) con la stessa struttura ma hook e angolazione \
-diversi, così chi pubblica può scegliere. Ogni variante è il post completo, pronto da incollare su LinkedIn.`;
+diversi, così chi pubblica può scegliere. Ogni variante è il post completo, pronto da incollare su LinkedIn.
+Se l'originale parla di un tema ammesso diverso dalle community (vendita, startup, AI e automazione, \
+comunicazione, leadership), la variante_a resta su quel tema, senza spostarla sulle community; la variante_b \
+può applicare la stessa idea alle community. Se l'originale parla già di community, entrambe restano lì.`;
 
 const COMPITO_REVISIONE = `Questa volta non scrivi da zero: ricevi una variante già scritta e una richiesta di modifica \
 di chi pubblica (es. "più corto", "cambia hook"). Riscrivi SOLO quella variante applicando la richiesta, \
@@ -71,9 +77,11 @@ rilevante per ${config.PROFILO_PUBBLICO}.
 Regole:
 - Non tradurre: nessuna frase del post originale deve essere riconoscibile come sua traduzione.
 - Scrivi in italiano naturale da LinkedIn italiano: niente anglicismi superflui, niente toni da guru.
-- Parla dei problemi del pubblico (crescita, spam, engagement, moderazione, monetizzazione \
-delle community Telegram), non di Doublegram in sé. Doublegram compare al massimo una volta, \
-in modo naturale, e solo se pertinente.
+- Parla dei temi del profilo, non di Doublegram in sé: community Telegram (crescita, spam, engagement, \
+moderazione, monetizzazione) è il tema principale, ma vanno bene anche vendita B2B, startup, AI e \
+automazione, crescita di community e creator, comunicazione e leadership. Porta l'esempio verso le \
+community solo se viene naturale: un post sulla vendita può restare un post sulla vendita. \
+Doublegram compare al massimo una volta, in modo naturale, e solo se pertinente.
 - Fatti su Doublegram, sul profilo, su clienti e risultati: usa SOLO quelli presenti nelle linee guida. \
 Dove servirebbe un dato che non hai, scrivi ${SEGNAPOSTO_DATO}, in una frase che resti coerente anche \
 prima che il dato venga inserito.

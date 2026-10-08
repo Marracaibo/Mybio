@@ -31,7 +31,7 @@ const EnvSchema = z.object({
     z
       .string()
       .default(
-        "admin e owner di community Telegram, progetti crypto, creator, aziende che usano Telegram per il supporto",
+        "admin e owner di community Telegram, progetti crypto, creator, aziende che usano Telegram per il supporto, founder di startup e chi lavora nella vendita B2B",
       ),
   ),
   MAX_CARATTERI: z.preprocess(vuotoComeAssente, z.coerce.number().int().positive().default(1300)),
