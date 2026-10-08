@@ -64,7 +64,9 @@ export async function inviaTesto(
   testo: string,
   opzioni: { quotedMessageId?: string } = {},
 ): Promise<string | undefined> {
-  const corpo: Record<string, string> = { chatId: cfg.gruppo, text: testo };
+  // Niente anteprima dei link: su whatsapp-web.js generarla può far fallire l'invio (500) e i link
+  // delle fonti nel messaggio di contesto non hanno bisogno di anteprima.
+  const corpo: Record<string, string | boolean> = { chatId: cfg.gruppo, text: testo, linkPreview: false };
   if (opzioni.quotedMessageId) corpo["quotedMessageId"] = opzioni.quotedMessageId;
   const risposta = await richiesta(cfg, "POST", "/messages/send-text", corpo);
   const id = (risposta as { messageId?: unknown } | null)?.messageId;

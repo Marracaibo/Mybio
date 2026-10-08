@@ -39,7 +39,7 @@ const MODELLO: Record<Ruolo, (c: Config) => string> = {
 };
 
 /** Modelli che accettano `output_config.effort` (Haiku 4.5 e Sonnet 4.5 lo rifiutano con un 400). */
-const SUPPORTA_EFFORT = /^claude-(fable|mythos|opus-(4-[5-9]|5)|sonnet-(4-6|5))/;
+const SUPPORTA_EFFORT = /^claude-(fable|mythos|opus-(4-[5-9]|5)|sonnet-(4-6|5)|haiku-5)/;
 /** Modelli che accettano il fallback lato server `fallbacks: "default"`. */
 const SUPPORTA_FALLBACK = /^claude-(fable-5|mythos-5|opus-5|sonnet-5-5)/;
 

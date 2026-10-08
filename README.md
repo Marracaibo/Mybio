@@ -99,9 +99,9 @@ La riga `segnaposto` compare solo se nel testo ci sono `[DATO DA INSERIRE]` o `[
 ## Costi
 
 Il testo da pubblicare lo scrive il modello più capace (`CLAUDE_MODEL`, Sonnet 5.5); trascrizione e
-analisi, che sono compiti semplici di lettura, li fa un modello economico (`CLAUDE_MODEL_CONTROLLI`, Haiku 4.5).
+analisi, che sono compiti semplici di lettura, li fa un modello economico (`CLAUDE_MODEL_CONTROLLI`, Haiku 5.5).
 La verifica delle bozze la fa Sonnet 5.5 con poco ragionamento (`CLAUDE_MODEL_VERIFICA`, `CLAUDE_EFFORT_CONTROLLI=low`):
-nelle prove con post e articoli veri Haiku dava esiti diversi sulla stessa bozza e segnalava problemi inesistenti.
+nelle prove con post e articoli veri Haiku 4.5 dava esiti diversi sulla stessa bozza e segnalava problemi inesistenti.
 Il system prompt con le linee guida è in cache, quindi più file elaborati nello stesso giro costano meno.
 
 Stima indicativa (dipende dalla lunghezza di `linee-guida.md` e dei post): pochi centesimi di dollaro a post,
@@ -130,9 +130,9 @@ Nel file `.env`:
 |---|---|
 | `ANTHROPIC_API_KEY` | chiave API di Anthropic |
 | `CLAUDE_MODEL` | modello che scrive le varianti, default `claude-sonnet-5-5` |
-| `CLAUDE_MODEL_CONTROLLI` | modello economico per trascrizione e analisi, default `claude-haiku-4-5` |
+| `CLAUDE_MODEL_CONTROLLI` | modello economico per trascrizione e analisi, default `claude-haiku-5-5` |
 | `CLAUDE_MODEL_VERIFICA` | modello che controlla le bozze, default `claude-sonnet-5-5` |
-| `CLAUDE_EFFORT_CONTROLLI` | ragionamento per analisi e verifica (`low`, `medium`, `high`), default `low`; ignorato da Haiku 4.5 |
+| `CLAUDE_EFFORT_CONTROLLI` | ragionamento per analisi e verifica (`low`, `medium`, `high`), default `low` |
 | `CLAUDE_FALLBACK` | `default` (consigliato): se il modello rifiuta una richiesta, Anthropic la riprova su un modello alternativo (solo sui modelli che lo supportano, es. Sonnet 5.5). `off` per disattivarlo |
 | `SHARED_DIR` | cartella condivisa, es. `G:\Il mio Drive\Doublegram-LinkedIn` |
 | `PROFILO_NOME`, `PROFILO_RUOLO`, `PROFILO_PUBBLICO` | chi firma i post e per chi scrive (entrano nel prompt) |
