@@ -27,8 +27,10 @@ services:
       - openwa-network
     # Nessuna porta pubblica: solo OpenWA, sulla rete interna, parla con il motore.
 
+  # Solo con COMPOSE_PROFILES=drive in deploy/.env (lo imposta deploy/installa.sh se trova rclone.conf).
   rclone:
     image: rclone/rclone:latest
+    profiles: ["drive"]
     restart: unless-stopped
     user: "1000:1000"
     entrypoint: ["/bin/sh", "/sync.sh"]

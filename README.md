@@ -254,6 +254,27 @@ VPS
 Segreti e dati di sessione restano sul server (`.env`, `deploy/segreti/`, volumi Docker), mai su Drive.
 Nessuna porta è pubblica: la dashboard di OpenWA si apre con un tunnel SSH.
 
+### Installazione automatica (consigliata)
+
+Su un VPS nuovo con Ubuntu 24.04 o 26.04 (es. OVHcloud VPS-1, 2 vCore / 4 GB), collegati con
+`ssh ubuntu@<ip-del-server>` e lancia:
+
+```bash
+git clone https://github.com/Marracaibo/Mybio.git doublegram-linkedin-engine
+cd doublegram-linkedin-engine
+sudo bash deploy/installa.sh
+```
+
+Lo script installa Docker, attiva il firewall (solo SSH aperto) e 2 GB di swap, avvia OpenWA, crea il `.env`
+(chiede solo la chiave Anthropic e genera da solo gli altri segreti), collega il numero WhatsApp con un
+**codice di 8 caratteri** da inserire sul telefono (Dispositivi collegati → Collega con il numero di telefono),
+fa scegliere il gruppo da un elenco, avvia il motore, registra il webhook e manda un messaggio di prova.
+Si può rilanciare quando serve (nuovo numero, altro gruppo, aggiornamento): salta i passi già fatti.
+Google Drive è facoltativo: se `deploy/segreti/rclone/rclone.conf` esiste (vedi il passo 4 qui sotto)
+lo script attiva anche la sincronizzazione, altrimenti la cartella condivisa resta solo sul server.
+
+I passi qui sotto descrivono la stessa installazione fatta a mano.
+
 **1. Server.** Crea il VPS (Ubuntu 24.04), installa Docker (`curl -fsSL https://get.docker.com | sh`) e git.
 
 **2. OpenWA** (dalla home del server):
@@ -300,7 +321,7 @@ scp "$env:APPDATA\rclone\rclone.conf" utente@server:~/doublegram-linkedin-engine
 
 Sul server: `sudo chown -R 1000:1000 deploy/segreti`. Se la cartella su Drive non si chiama
 `Doublegram-LinkedIn` (nella radice di "Il mio Drive"), imposta `RCLONE_REMOTO=gdrive:percorso/della/cartella`
-in un file `deploy/.env`.
+in un file `deploy/.env`. Nello stesso file aggiungi `COMPOSE_PROFILES=drive`: senza, il servizio rclone non parte.
 
 **5. Avvio:**
 
