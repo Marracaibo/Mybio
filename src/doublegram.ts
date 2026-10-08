@@ -7,7 +7,16 @@ import type { Logger } from "./log.js";
 import { descriviErrore } from "./log.js";
 import { configOpenWA, inviaTesto, reagisci, richiesta, scaricaMedia, scrivendoMentre, type ConfigOpenWA } from "./openwa.js";
 import { lavoraPost, lavoroCitato } from "./post.js";
-import { chiediSchiavo, conversazioneCitata, rispondiSchiavo, scaricaAllegato, type Allegato } from "./schiavo.js";
+import {
+  chiediSchiavo,
+  conversazioneCitata,
+  eseguiBriefing,
+  rispondiSchiavo,
+  salvaDossier,
+  scaricaAllegato,
+  type Allegato,
+  type Modo,
+} from "./schiavo.js";
 import { oggi } from "./testo.js";
 
 /**
@@ -175,7 +184,9 @@ const MENU = [
   "*Lookup*  /lookup <numero> oppure /lookup @persona – info sull'account WhatsApp",
   "*Security*  /security on | off | stato · /vieta <parola> · /consenti <parola>",
   "*Shop*  /shop · /aggiungi <n> [quantità] · /togli <n> · /carrello · /svuota · /ordina",
-  "*Jarvis*  /schiavo <richiesta> (o /jarvis, o un vocale che inizia con \"Jarvis\") – il maggiordomo: cerca sul web, legge la chat, guarda foto e PDF citati, manda card, sondaggi e promemoria",
+  "*Jarvis*  /schiavo <richiesta> (o /jarvis, o un vocale che inizia con \"Jarvis\": risponde a voce) – il maggiordomo: cerca sul web, legge la chat, guarda foto e PDF citati, numeri di Doublegram (simulati) e grafici, card, sondaggi e promemoria",
+  "*Clienti*  /cliente <azienda> – dossier prima di una chiamata: chi sono, community, persone, argomenti, obiezioni, email pronta",
+  "*Briefing*  ogni mattina alle 8:45 (o subito con /briefing): ieri nel gruppo, oggi, numeri, notizie, consigli",
   "",
   "Il motore LinkedIn resta com'è: adatta, adatta subito, manda bozza, aiuto (citando una bozza).",
 ].join("\n");
@@ -347,7 +358,10 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
 
   // --- Il maggiordomo
   const chi = msg.fromMe ? "il Padrone (il titolare del numero collegato)" : (msg.contact?.name ?? msg.contact?.pushName ?? soloCifre(msg.author ?? msg.from ?? ""));
-  const schiavo = async (richiestaTesto: string, opzioni: { precedenti?: Parameters<typeof chiediSchiavo>[2]["precedenti"]; trascrizione?: string } = {}) => {
+  const schiavo = async (
+    richiestaTesto: string,
+    opzioni: { precedenti?: Parameters<typeof chiediSchiavo>[2]["precedenti"]; trascrizione?: string; modo?: Modo; aVoce?: boolean } = {},
+  ) => {
     if (!sottoTetto()) {
       salvaStato(stato);
       await rispondi("🎩 Perdoni, Signore: per oggi ho esaurito le energie concessemi. Riprovi domani.");
@@ -365,10 +379,20 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
         else allegato = a;
       }
       const citato = opzioni.precedenti ? undefined : msg.quotedMessage?.body;
+      // "rispondimi a voce", "mandami un vocale": risposta con un vocale anche se la richiesta è scritta.
+      const aVoce = opzioni.aVoce ?? /(a voce|con un vocale|in vocale|mandami un vocale)/i.test(richiestaTesto);
       const { risposta, scambi } = await scrivendoMentre(openwa, () =>
-        chiediSchiavo({ config, log, openwa, chi }, richiestaTesto, { precedenti: opzioni.precedenti, allegato, trascrizione, citato }),
+        chiediSchiavo({ config, log, openwa, chi }, richiestaTesto, {
+          precedenti: opzioni.precedenti,
+          allegato,
+          trascrizione,
+          citato,
+          modo: opzioni.modo,
+          aVoce,
+        }),
       );
-      await rispondiSchiavo(openwa, risposta, scambi, msg.id);
+      await rispondiSchiavo({ config, log, openwa }, risposta, scambi, { rispondiA: msg.id, aVoce });
+      if (opzioni.modo === "cliente") log.info(`Schiavo: dossier salvato in 06-clienti/${salvaDossier(config, richiestaTesto, risposta)}`);
       log.info(`Schiavo: risposto (${risposta.length} caratteri)`);
     } catch (e) {
       log.errore(`Schiavo: ${descriviErrore(e)}`);
@@ -433,11 +457,11 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
       const trascritto = await trascrivi(config, audio, msg.media?.mimetype ?? "audio/ogg");
       log.info(`Scribe: vocale trascritto (${trascritto.length} caratteri)`);
       await rispondi(trascritto ? `🎙️ ${trascritto}` : "🎙️ (vocale senza parole riconoscibili)");
-      // "Jarvis, …" / "Schiavo, …" a voce: la richiesta va al maggiordomo.
+      // "Jarvis, …" / "Schiavo, …" a voce, o un vocale che risponde al maggiordomo: risponde con un vocale.
       const chiamata = /^\W*(jarvis|giarvis|schiavo)\b[\s,.:;!?]*/i.exec(trascritto);
-      if (chiamata) {
-        const precedenti = conversazioneCitata(msg.quotedMessage);
-        await schiavo(trascritto.slice(chiamata[0].length), { precedenti, trascrizione: undefined });
+      const precedenti = conversazioneCitata(msg.quotedMessage);
+      if (trascritto && (chiamata || precedenti)) {
+        await schiavo(chiamata ? trascritto.slice(chiamata[0].length) : trascritto, { precedenti, aVoce: true });
       }
     } catch (e) {
       log.errore(`Scribe: ${descriviErrore(e)}`);
@@ -472,7 +496,7 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
   // --- Comandi
   const nome = (comando[1] ?? "").toLowerCase();
   const argomento = (comando[2] ?? "").trim();
-  const noti = ["doublegram", "aiuto", "help", "menu", "ai", "post", "lookup", "scribe", "security", "vieta", "consenti", "shop", "aggiungi", "togli", "carrello", "svuota", "ordina", "schiavo", "jarvis"];
+  const noti = ["doublegram", "aiuto", "help", "menu", "ai", "post", "lookup", "scribe", "security", "vieta", "consenti", "shop", "aggiungi", "togli", "carrello", "svuota", "ordina", "schiavo", "jarvis", "cliente", "prospect", "briefing"];
   if (!noti.includes(nome)) return false;
   segna();
   const cliente = msg.fromMe ? "io" : soloCifre(msg.author ?? msg.from ?? "") || "sconosciuto";
@@ -514,6 +538,36 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
           return true;
         }
         await schiavo(argomento, { precedenti: conversazioneCitata(msg.quotedMessage) });
+        return true;
+      }
+
+      case "cliente":
+      case "prospect": {
+        if (!argomento) {
+          salvaStato(stato);
+          await rispondi("🎩 Di quale azienda desidera il dossier, Signore? Per esempio: /cliente Acme S.p.A. (anche con il sito: /cliente acme.com)");
+          return true;
+        }
+        await schiavo(argomento, { modo: "cliente" });
+        return true;
+      }
+
+      case "briefing": {
+        if (!sottoTetto()) {
+          salvaStato(stato);
+          await rispondi("🎩 Per oggi ho esaurito le energie concessemi, Signore.");
+          return true;
+        }
+        salvaStato(stato);
+        if (msg.id) void reagisci(openwa, msg.id, "🎩");
+        try {
+          await scrivendoMentre(openwa, () => eseguiBriefing({ config, log, openwa }, msg.id));
+        } catch (e) {
+          log.errore(`Briefing: ${descriviErrore(e)}`);
+          await rispondi(`🎩 Il briefing non è riuscito: ${descriviErrore(e)}`);
+        } finally {
+          if (msg.id) void reagisci(openwa, msg.id, "");
+        }
         return true;
       }
 

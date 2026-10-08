@@ -21,6 +21,8 @@ services:
       PIANIFICAZIONE_INTERNA: "true"
       # Scribe: trascrizione dei vocali con Whisper sul server (servizio scribe qui sotto).
       SCRIBE_URL: ${SCRIBE_URL:-http://scribe:8000/trascrivi}
+      # Voce del maggiordomo /schiavo (Piper, nello stesso servizio scribe).
+      VOCE_URL: ${VOCE_URL:-http://scribe:8000/parla}
       TZ: ${TZ:-Europe/Rome}
     volumes:
       - ./dati/condivisa:/condivisa
@@ -29,8 +31,8 @@ services:
       - openwa-network
     # Nessuna porta pubblica: solo OpenWA, sulla rete interna, parla con il motore.
 
-  # Scribe: Whisper "small" su CPU per i vocali del gruppo. Al primo avvio scarica il modello (~500 MB)
-  # in dati/scribe; usa circa 800 MB di RAM. Raggiungibile solo dal motore, sulla rete interna.
+  # Scribe: Whisper "small" su CPU per i vocali del gruppo, e la voce del maggiordomo (Piper). Al primo avvio
+  # scarica i modelli (~600 MB) in dati/scribe; usa circa 1 GB di RAM. Raggiungibile solo dal motore.
   scribe:
     build: ./scribe
     restart: unless-stopped
@@ -38,6 +40,7 @@ services:
     environment:
       WHISPER_MODELLO: ${WHISPER_MODELLO:-small}
       WHISPER_THREADS: "2"
+      PIPER_VOCE: ${PIPER_VOCE:-it_IT-paola-medium}
     volumes:
       - ./dati/scribe:/modelli
     networks:

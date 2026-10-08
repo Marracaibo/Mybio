@@ -56,6 +56,14 @@ const EnvSchema = z.object({
   GROQ_API_KEY: z.preprocess(vuotoComeAssente, z.string().optional()),
   SCRIBE_URL: z.preprocess(vuotoComeAssente, z.string().default("https://api.groq.com/openai/v1/audio/transcriptions")),
   SCRIBE_MODELLO: z.preprocess(vuotoComeAssente, z.string().default("whisper-large-v3-turbo")),
+  /** Voce del maggiordomo (Piper nel servizio scribe): vuoto = niente vocali, solo testo. */
+  VOCE_URL: z.preprocess(vuotoComeAssente, z.string().default("")),
+  /** Briefing del mattino nel gruppo (HH:MM nel fuso TZ); "off" per spegnerlo. */
+  BRIEFING_ORARIO: z.preprocess(vuotoComeAssente, z.string().regex(/^(off|\d{1,2}:\d{2})$/).default("08:45")),
+  /** true: il briefing arriva anche come vocale. */
+  BRIEFING_VOCE: z.preprocess(vuotoComeAssente, z.enum(["true", "false"]).default("true")),
+  /** Dati di Doublegram per il maggiordomo: "simulati" (finti ma coerenti) o "off". */
+  DATI_DOUBLEGRAM: z.preprocess(vuotoComeAssente, z.enum(["simulati", "off"]).default("simulati")),
   PIANIFICAZIONE_INTERNA: z.preprocess(vuotoComeAssente, z.enum(["true", "false"]).default("true")),
   ORARIO_RSS: z.preprocess(vuotoComeAssente, orario.default("07:00")),
   ORARIO_ADATTA: z.preprocess(vuotoComeAssente, orario.default("07:30")),

@@ -5,7 +5,7 @@ import http from "node:http";
 import path from "node:path";
 import { gestisciMessaggio, type MessaggioRicevuto } from "./comandi.js";
 import { gestisciDoublegram } from "./doublegram.js";
-import { controllaPromemoria } from "./schiavo.js";
+import { controllaBriefing, controllaPromemoria } from "./schiavo.js";
 import { caricaConfig, DATI_DIR, PROJECT_DIR, verificaSeparazioneCartelle, type Config } from "./config.js";
 import { creaLogger, descriviErrore } from "./log.js";
 import { citazioneDaStorico, configOpenWA, inviatoDaQui } from "./openwa.js";
@@ -238,6 +238,11 @@ function main(): void {
   if (config.DOUBLEGRAM_BOT === "true") {
     const openwa = configOpenWA(config);
     setInterval(() => void controllaPromemoria(openwa, log).catch((e) => log.errore(`Promemoria: ${descriviErrore(e)}`)), 30_000).unref();
+    // Briefing del mattino: nella coda dei lavori, così non si accavalla con altro.
+    setInterval(
+      () => inCoda("briefing", () => controllaBriefing({ config, log, openwa }).catch((e) => log.errore(`Briefing: ${descriviErrore(e)}`))),
+      60_000,
+    ).unref();
   }
 
   const chiudi = () => {

@@ -151,6 +151,20 @@ export async function inviaImmagine(cfg: ConfigOpenWA, png: Buffer, didascalia?:
   return typeof id === "string" ? id : undefined;
 }
 
+/** Manda un vocale (Ogg/Opus) nel gruppo, eventualmente citando un messaggio. */
+export async function inviaVocale(cfg: ConfigOpenWA, ogg: Buffer, quotedMessageId?: string): Promise<string | undefined> {
+  const corpo: Record<string, string | boolean> = {
+    chatId: cfg.gruppo,
+    base64: ogg.toString("base64"),
+    mimetype: "audio/ogg; codecs=opus",
+    ptt: true,
+  };
+  if (quotedMessageId) corpo["quotedMessageId"] = quotedMessageId;
+  const risposta = await richiesta(cfg, "POST", "/messages/send-audio", corpo);
+  const id = (risposta as { messageId?: unknown } | null)?.messageId;
+  return typeof id === "string" ? id : undefined;
+}
+
 /** Scarica il file allegato a un messaggio (quando il webhook non lo porta già dentro). */
 export async function scaricaMedia(cfg: ConfigOpenWA, chatId: string, messageId: string): Promise<Buffer> {
   const url = `${cfg.url}/api/sessions/${encodeURIComponent(cfg.sessione)}/messages/${encodeURIComponent(chatId)}/${encodeURIComponent(messageId)}/media`;
