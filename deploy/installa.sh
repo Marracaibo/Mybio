@@ -180,6 +180,10 @@ else
     numero=""
     while ! [[ "$numero" =~ ^[0-9]{8,15}$ ]]; do
       numero="$(chiedi "Numero dedicato con prefisso, solo cifre (es. 393331234567):" | tr -d ' +')"
+      # Cellulare italiano scritto senza prefisso (10 cifre che iniziano con 3): aggiungo 39.
+      if [[ "$numero" =~ ^3[0-9]{9}$ ]]; then
+        numero="39$numero"; avviso "Ho aggiunto il prefisso italiano: uso $numero"
+      fi
     done
     codice=""
     for _ in 1 2 3 4 5; do
