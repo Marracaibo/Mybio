@@ -9,6 +9,8 @@ RUN npm ci --no-audit --no-fund
 COPY tsconfig.json ./
 COPY src ./src
 COPY modello-cartella-condivisa ./modello-cartella-condivisa
+# Font e logo per le card dei post (/post)
+COPY assets ./assets
 
 # Stato, log e copie dei sorgenti in /dati; cartella condivisa (sincronizzata con Google Drive) in /condivisa.
 # Nessun segreto nell'immagine: arrivano dal file .env tramite docker compose.

@@ -6,6 +6,7 @@ import { DATI_DIR, type Config } from "./config.js";
 import type { Logger } from "./log.js";
 import { descriviErrore } from "./log.js";
 import { configOpenWA, inviaTesto, richiesta, scaricaMedia, type ConfigOpenWA } from "./openwa.js";
+import { lavoraPost, lavoroCitato } from "./post.js";
 import { oggi } from "./testo.js";
 
 /**
@@ -166,6 +167,7 @@ const MENU = [
   "🤖 *Doublegram per WhatsApp* (prototipo) – comandi nel gruppo:",
   "",
   "*AI*  /ai <domanda> – risponde l'assistente (rispondendo a un messaggio, lo usa come contesto)",
+  "*Post*  /post <di cosa parla> – post per il canale Telegram con la card; se servono info le chiede",
   "*Scribe*  i vocali del gruppo vengono trascritti in automatico · /scribe on | off",
   "*Lookup*  /lookup <numero> oppure /lookup @persona – info sull'account WhatsApp",
   "*Security*  /security on | off | stato · /vieta <parola> · /consenti <parola>",
@@ -337,6 +339,27 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
     return true;
   };
 
+  // --- Post del canale: risposta citando le domande, la card o il testo di un post
+  if (!comando && testo && msg.quotedMessage) {
+    const lavoro = lavoroCitato(msg.quotedMessage);
+    if (lavoro) {
+      segna();
+      if (!sottoTetto()) {
+        salvaStato(stato);
+        await rispondi("📝 Limite giornaliero di richieste raggiunto, riprova domani.");
+        return true;
+      }
+      salvaStato(stato);
+      try {
+        await lavoraPost({ config, log, openwa }, lavoro.richiesta, lavoro, testo, msg.id);
+      } catch (e) {
+        log.errore(`Post: ${descriviErrore(e)}`);
+        await rispondi(`⚠️ Non sono riuscito a preparare il post: ${descriviErrore(e)}`);
+      }
+      return true;
+    }
+  }
+
   // --- Scribe: vocali (anche i propri)
   if (vocale && !comando) {
     segna();
@@ -394,7 +417,7 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
   // --- Comandi
   const nome = (comando[1] ?? "").toLowerCase();
   const argomento = (comando[2] ?? "").trim();
-  const noti = ["doublegram", "aiuto", "help", "menu", "ai", "lookup", "scribe", "security", "vieta", "consenti", "shop", "aggiungi", "togli", "carrello", "svuota", "ordina"];
+  const noti = ["doublegram", "aiuto", "help", "menu", "ai", "post", "lookup", "scribe", "security", "vieta", "consenti", "shop", "aggiungi", "togli", "carrello", "svuota", "ordina"];
   if (!noti.includes(nome)) return false;
   segna();
   const cliente = msg.fromMe ? "io" : soloCifre(msg.author ?? msg.from ?? "") || "sconosciuto";
@@ -423,6 +446,23 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
         salvaStato(stato);
         const r = await rispondiAI(config, argomento || "Riassumi e commenta questo messaggio.", msg.quotedMessage?.body);
         await rispondi(`🤖 ${r}`);
+        return true;
+      }
+
+      case "post": {
+        if (!argomento) {
+          salvaStato(stato);
+          await rispondi("📝 Scrivi di cosa parla il post, per esempio: /post uscita della nuova dashboard, il 15 ottobre");
+          return true;
+        }
+        if (!sottoTetto()) {
+          salvaStato(stato);
+          await rispondi("📝 Limite giornaliero di richieste raggiunto, riprova domani.");
+          return true;
+        }
+        salvaStato(stato);
+        await rispondi("📝 Ci lavoro: un minuto e arriva la proposta (o qualche domanda).");
+        await lavoraPost({ config, log, openwa }, argomento, undefined, undefined, msg.id);
         return true;
       }
 

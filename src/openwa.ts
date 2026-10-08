@@ -109,6 +109,15 @@ export async function preparaSessione(cfg: ConfigOpenWA, opzioni: { forza?: bool
   return true;
 }
 
+/** Invia un'immagine (base64) al gruppo, con didascalia facoltativa; restituisce l'id del messaggio. */
+export async function inviaImmagine(cfg: ConfigOpenWA, png: Buffer, didascalia?: string): Promise<string | undefined> {
+  const corpo: Record<string, string> = { chatId: cfg.gruppo, base64: png.toString("base64"), mimetype: "image/png" };
+  if (didascalia) corpo["caption"] = didascalia.slice(0, 1024);
+  const risposta = await richiesta(cfg, "POST", "/messages/send-image", corpo);
+  const id = (risposta as { messageId?: unknown } | null)?.messageId;
+  return typeof id === "string" ? id : undefined;
+}
+
 /** Scarica il file allegato a un messaggio (quando il webhook non lo porta già dentro). */
 export async function scaricaMedia(cfg: ConfigOpenWA, chatId: string, messageId: string): Promise<Buffer> {
   const url = `${cfg.url}/api/sessions/${encodeURIComponent(cfg.sessione)}/messages/${encodeURIComponent(chatId)}/${encodeURIComponent(messageId)}/media`;
