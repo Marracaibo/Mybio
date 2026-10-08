@@ -4,7 +4,7 @@ import { leggiBozza, type Bozza } from "./bozza.js";
 import { daIgnorare, spostaConMotivo } from "./cartelle.js";
 import { CARTELLE, caricaConfig, verificaSeparazioneCartelle } from "./config.js";
 import { creaLogger, descriviErrore } from "./log.js";
-import { configOpenWA, inviaTesto } from "./openwa.js";
+import { configOpenWA, inviaTesto, preparaSessione } from "./openwa.js";
 import { caricaStato, salvaStato } from "./stato.js";
 import { inizioTesto, oggi, testoSemplice } from "./testo.js";
 
@@ -103,7 +103,12 @@ async function main(): Promise<number> {
       daInviare = daInviare.slice(0, disponibili);
     }
 
+    if (!(await preparaSessione(openwa).catch(() => false))) {
+      log.errore("La sessione WhatsApp non è pronta (scollegata o in attesa del QR). Si riprova al prossimo giro.");
+      return 1;
+    }
     log.info(`Invio ${nome} (${daInviare.length} messaggi)`);
+    let riavviata = false;
     const parti = ["contesto", "A", "B"] as const;
     let inviati = giaInviati;
     for (const testo of daInviare) {
@@ -111,8 +116,21 @@ async function main(): Promise<number> {
       try {
         id = await inviaTesto(openwa, testo);
       } catch (e) {
-        log.errore(`Invio interrotto: ${descriviErrore(e)}. Si riprova al prossimo giro.`);
-        return 1;
+        // Una sola volta: la sessione può risultare collegata senza riuscire a spedire (whatsapp-web.js
+        // dopo un riavvio o un aggiornamento di WhatsApp Web). Riavviarla di solito basta.
+        if (riavviata || !/ 5\d\d /.test(descriviErrore(e))) {
+          log.errore(`Invio interrotto: ${descriviErrore(e)}. Si riprova al prossimo giro.`);
+          return 1;
+        }
+        riavviata = true;
+        log.avviso(`Invio non riuscito (${descriviErrore(e)}): riavvio la sessione WhatsApp e riprovo una volta.`);
+        try {
+          if (!(await preparaSessione(openwa, { forza: true }))) throw new Error("la sessione non è tornata pronta");
+          id = await inviaTesto(openwa, testo);
+        } catch (e2) {
+          log.errore(`Invio interrotto anche dopo il riavvio: ${descriviErrore(e2)}. Si riprova al prossimo giro.`);
+          return 1;
+        }
       }
       if (id) {
         // Fase 4: chi risponde citando questo messaggio sta parlando di questa bozza.

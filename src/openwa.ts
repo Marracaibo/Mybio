@@ -73,6 +73,42 @@ export async function inviaTesto(
   return typeof id === "string" ? id : undefined;
 }
 
+const attendi = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export async function statoSessione(cfg: ConfigOpenWA): Promise<string> {
+  const s = (await richiesta(cfg, "GET", "")) as { status?: unknown } | null;
+  return typeof s?.status === "string" ? s.status : "";
+}
+
+/** Attende che la sessione sia "ready" (fino a `secondi`); false se resta scollegata o chiede il QR. */
+async function attendiPronta(cfg: ConfigOpenWA, secondi: number): Promise<boolean> {
+  for (let t = 0; t < secondi; t += 5) {
+    const s = await statoSessione(cfg).catch(() => "");
+    if (s === "ready") return true;
+    if (s === "qr_ready" || s === "failed") return false;
+    await attendi(5000);
+  }
+  return false;
+}
+
+/**
+ * Se la sessione WhatsApp non è pronta (es. dopo un riavvio del server) la avvia e attende.
+ * Con `forza` la ferma e la riavvia: rimedio all'errore di whatsapp-web.js "called before startComms",
+ * quando la sessione risulta collegata ma non riesce a spedire. Dopo il riavvio lascia un minuto
+ * a WhatsApp Web per finire la sincronizzazione. Restituisce false se non torna pronta.
+ */
+export async function preparaSessione(cfg: ConfigOpenWA, opzioni: { forza?: boolean } = {}): Promise<boolean> {
+  if (!opzioni.forza && (await statoSessione(cfg)) === "ready") return true;
+  if (opzioni.forza) {
+    await richiesta(cfg, "POST", "/stop").catch(() => undefined);
+    await attendi(15_000);
+  }
+  await richiesta(cfg, "POST", "/start").catch(() => undefined);
+  if (!(await attendiPronta(cfg, 240))) return false;
+  await attendi(60_000);
+  return true;
+}
+
 export async function elencaGruppi(cfg: ConfigOpenWA): Promise<unknown> {
   return richiesta(cfg, "GET", "/groups");
 }
