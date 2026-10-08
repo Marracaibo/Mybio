@@ -3,7 +3,7 @@ import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { creaClient } from "./claude.js";
 import { DATI_DIR, type Config } from "./config.js";
-import { riepilogo, AVVISO_SIMULATI } from "./dati-simulati.js";
+import { riepilogo, riepilogoAssistenza, AVVISO_SIMULATI } from "./dati-simulati.js";
 import { creaCard } from "./grafica.js";
 import { creaGrafico, type DatiGrafico } from "./grafico.js";
 import { descriviErrore, type Logger } from "./log.js";
@@ -189,13 +189,22 @@ const STRUMENTO_DATI = strumento(
   },
 );
 
+const STRUMENTO_ASSISTENZA = strumento(
+  "assistenza_doublegram",
+  `Assistenza clienti e soddisfazione degli utenti di Doublegram in un periodo: ticket aperti e chiusi, arretrato, tempi di prima risposta e di risoluzione, CSAT, NPS, recensioni, argomenti dei ticket, segnali emergenti, commenti degli utenti, capacità del team e serie giorno per giorno. ATTENZIONE: ${AVVISO_SIMULATI}.`,
+  {
+    da: { type: "string", description: "Data iniziale YYYY-MM-DD" },
+    a: { type: "string", description: "Data finale YYYY-MM-DD (al massimo oggi)" },
+  },
+);
+
 function strumenti(config: Config, modo: Modo): Anthropic.Beta.BetaToolUnion[] {
   const ricerche = modo === "cliente" ? 10 : modo === "briefing" ? 3 : 5;
   return [
     { type: "web_search_20260209", name: "web_search", max_uses: ricerche },
     { type: "web_fetch_20260209", name: "web_fetch", max_uses: ricerche },
     ...STRUMENTI_BASE,
-    ...(config.DATI_DOUBLEGRAM === "simulati" ? [STRUMENTO_DATI] : []),
+    ...(config.DATI_DOUBLEGRAM === "simulati" ? [STRUMENTO_DATI, STRUMENTO_ASSISTENZA] : []),
   ];
 }
 
@@ -300,6 +309,8 @@ async function eseguiStrumento(ctx: Contesto, nome: string, input: Record<string
     }
     case "dati_doublegram":
       return JSON.stringify(riepilogo(String(input["da"] ?? ""), String(input["a"] ?? "")));
+    case "assistenza_doublegram":
+      return JSON.stringify(riepilogoAssistenza(String(input["da"] ?? ""), String(input["a"] ?? "")));
     case "invia_grafico": {
       const png = creaGrafico({
         titolo: String(input["titolo"] ?? ""),
@@ -370,7 +381,7 @@ che si è detto da ieri mattina, elenca_promemoria per gli impegni, dati_doubleg
 confrontati con i 7 precedenti, e al massimo 2 ricerche web su novità di ieri e di oggi su Telegram, community online e
 bot concorrenti (Combot, Rose, Group Help, Shieldy).
 Formato: saluto da maggiordomo con la data · *Ieri nel gruppo* (decisioni e compiti, con i nomi) · *Oggi* (impegni) ·
-*I numeri* (3-4 righe, dicendo che sono simulati) · *Dal mondo* (1-3 notizie con la fonte) · *Il mio consiglio*
+*I numeri* (3-4 righe con vendite e assistenza, dicendo che sono simulati) · *Dal mondo* (1-3 notizie con la fonte) · *Il mio consiglio*
 (1-2 priorità). Al massimo 1500 caratteri. Manda un grafico solo se un andamento è davvero notevole.
 Non programmare promemoria e non mandare sondaggi di tua iniziativa: proponili, e li farai se te lo chiedono.
 In fondo metti una riga che contiene solo "VOCE:" e sotto una versione parlata di circa 40 secondi (al massimo
@@ -393,6 +404,7 @@ risolvi davvero il problema, con precisione, e quando serve usi gli strumenti se
 Cosa sai fare (usa gli strumenti, non limitarti a descrivere):
 - cercare sul web informazioni aggiornate (web_search) e leggere pagine e link (web_fetch), citando le fonti;
 - leggere la chat del gruppo per riassunti e "cosa mi sono perso" (leggi_chat);
+- rispondere sui numeri di Doublegram (dati_doublegram) e sull'assistenza clienti e la soddisfazione (assistenza_doublegram);
 - guardare immagini e PDF e ascoltare vocali che ti vengono citati (arrivano già nel messaggio);
 - mandare card grafiche nello stile Doublegram News (invia_card), sondaggi (invia_sondaggio), promemoria a orario (programma_promemoria);
 - preparare post per il canale Telegram (crea_post_canale) e ricordare informazioni nel tempo (ricorda / dimentica).
@@ -407,8 +419,9 @@ Regole:
 - Non inventare fatti, numeri o fonti: se non lo sai e non puoi verificarlo, dillo con garbo.
 - Agisci solo nel gruppo: non puoi scrivere in privato a nessuno e non devi provarci.
 - Se hai usato uno strumento che manda qualcosa nel gruppo, nella risposta dillo in una riga, senza ripetere il contenuto.
-- I dati di Doublegram (dati_doublegram) sono SIMULATI: quando li usi dillo sempre ("dati simulati"). Con i numeri
-  ragiona da CFO: confronta i periodi, trova le cause probabili e proponi azioni concrete e misurabili.
+- I dati di Doublegram (dati_doublegram, assistenza_doublegram) sono SIMULATI: quando li usi dillo sempre ("dati
+  simulati"). Con i numeri ragiona da CFO e da responsabile dell'assistenza: confronta i periodi, collega le cause
+  (es. ticket, tempi di risposta, soddisfazione e disdette), proponi azioni concrete e misurabili.
 
 Note salvate (cose che il team ti ha chiesto di ricordare):
 ${note.length ? note.map((n, i) => `${i + 1}. ${n}`).join("\n") : "(nessuna)"}

@@ -1,5 +1,6 @@
 /**
- * Dati di Doublegram SIMULATI per il maggiordomo: utenti, abbonati Premium, ricavi, costi, disdette.
+ * Dati di Doublegram SIMULATI per il maggiordomo: utenti, abbonati Premium, ricavi, costi, disdette, e assistenza
+ * clienti (ticket, tempi di risposta, CSAT, NPS, commenti degli utenti).
  * Sono numeri inventati ma coerenti nel tempo (stesso giorno → stessi numeri), utili per provare domande come
  * "quanti abbonati abbiamo oggi?", "com'è andato il mese?", "perché perdiamo clienti?".
  * Quando ci sarà un accesso ai dati veri, basta sostituire questo modulo con chiamate alle API di Doublegram.
@@ -162,6 +163,123 @@ export function riepilogo(da: string, a: string): Record<string, unknown> {
       disdette: g.disdette_premium,
       ricavi: g.ricavi,
       costi: g.costi,
+    })),
+  };
+}
+
+// ---------- Assistenza clienti e soddisfazione (SIMULATE) ----------
+
+interface GiornoAssistenza {
+  data: string;
+  ticket_aperti: number;
+  ticket_chiusi: number;
+  arretrato: number;
+  prima_risposta_ore: number;
+  risoluzione_ore: number;
+  csat: number;
+  risposte_csat: number;
+}
+
+/** Ticket giorno per giorno, legati agli utenti attivi. Da 16 giorni c'è un bug (captcha su Android) che li fa salire. */
+function storiaAssistenza(): GiornoAssistenza[] {
+  const giorni = storia();
+  const inizioBug = giorni.length - 16;
+  let arretrato = 18;
+  return giorni.map((g, t) => {
+    const bug = t >= inizioBug;
+    const aperti = Math.round(g.attivi_30g * 0.0016 * (bug ? 1.5 : 1) * (0.7 + 0.6 * caso(t, 11)));
+    // Capacità del team: 2 operatori, nel weekend solo urgenze.
+    const dow = new Date(`${g.data}T12:00:00Z`).getUTCDay();
+    const capacita = (dow === 0 || dow === 6 ? 5 : 17) * (0.85 + 0.3 * caso(t, 12));
+    const chiusi = Math.max(0, Math.round(Math.min(aperti + arretrato, capacita)));
+    arretrato = Math.max(0, arretrato + aperti - chiusi);
+    const primaRisposta = 1.8 + arretrato * 0.22 + 1.5 * caso(t, 13);
+    const csat = Math.min(5, Math.max(1, 4.6 - (bug ? 0.4 : 0) - 0.02 * Math.max(0, primaRisposta - 3) + 0.25 * (caso(t, 14) - 0.5)));
+    return {
+      data: g.data,
+      ticket_aperti: aperti,
+      ticket_chiusi: chiusi,
+      arretrato,
+      prima_risposta_ore: r2(primaRisposta),
+      risoluzione_ore: r2(10 + arretrato * 0.6 + 8 * caso(t, 15)),
+      csat: r2(csat),
+      risposte_csat: Math.round(chiusi * 0.38),
+    };
+  });
+}
+
+const COMMENTI_NORMALI = [
+  "★★★★★ «Security ci ha salvato da un raid di 300 bot in una notte, grazie!» (gruppo crypto, 12k membri)",
+  "★★★★★ «Scribe è comodissimo, ora nessuno nel gruppo si lamenta più dei vocali lunghi»",
+  "★★★★☆ «Ottimo, ma la configurazione iniziale del captcha non è chiarissima»",
+  "★★★☆☆ «Ho finito i crediti AI a metà mese, vorrei un piano con più crediti inclusi»",
+  "★★☆☆☆ «Il rimborso ha richiesto 5 giorni, troppo»",
+  "★★★★★ «Supporto velocissimo, mi hanno risposto in 20 minuti»",
+];
+
+const COMMENTI_RECENTI = [
+  "★★☆☆☆ «Telegram ora fa i messaggi di benvenuto gratis: perché dovrei pagare Premium?»",
+  "★★☆☆☆ «Ho aspettato quasi un giorno per una risposta»",
+  "★★★☆☆ «Mi piace Doublegram ma vorrei un piano annuale che costi meno»",
+  "★★★★★ «Lookup ci ha aiutato a scoprire due finti admin che chiedevano soldi ai membri»",
+  "★★★★☆ «Scribe trascrive benissimo in italiano, in portoghese ancora qualche errore»",
+  "★★★★★ «Doublegram AI scrive gli annunci del canale meglio di me»",
+];
+
+/** Riepilogo dell'assistenza in un periodo (YYYY-MM-DD, estremi inclusi). */
+export function riepilogoAssistenza(da: string, a: string): Record<string, unknown> {
+  const tutti = storiaAssistenza();
+  const inizioBug = tutti[tutti.length - 16]!.data;
+  const giorni = tutti.filter((g) => g.data >= da && g.data <= a);
+  if (!giorni.length) return { avviso: AVVISO_SIMULATI, errore: `Nessun dato tra ${da} e ${a}: i dati vanno dal ${tutti[0]!.data} al ${tutti.at(-1)!.data}.` };
+  const somma = (k: keyof GiornoAssistenza) => giorni.reduce((s, g) => s + (g[k] as number), 0);
+  const media = (k: keyof GiornoAssistenza) => r2(somma(k) / giorni.length);
+  const conBug = giorni.at(-1)!.data >= inizioBug;
+  const csat = r2(giorni.reduce((s, g) => s + g.csat * g.risposte_csat, 0) / Math.max(1, somma("risposte_csat")));
+  const serie = giorni.length <= 45 ? giorni : giorni.filter((_, i) => i % 7 === 6 || i === giorni.length - 1);
+  return {
+    avviso: AVVISO_SIMULATI,
+    periodo: { da: giorni[0]!.data, a: giorni.at(-1)!.data, giorni: giorni.length },
+    ticket: {
+      aperti: somma("ticket_aperti"),
+      chiusi: somma("ticket_chiusi"),
+      arretrato_a_fine_periodo: giorni.at(-1)!.arretrato,
+      prima_risposta_media_ore: media("prima_risposta_ore"),
+      risoluzione_media_ore: media("risoluzione_ore"),
+      ticket_per_operatore_al_giorno: r2(somma("ticket_chiusi") / giorni.length / 2),
+    },
+    soddisfazione: {
+      csat_medio_su_5: csat,
+      risposte_al_sondaggio: somma("risposte_csat"),
+      nps: conBug ? 27 : 38,
+      nps_mese_precedente: 36,
+      recensioni_store: conBug ? { media: 4.2, ultime_30: 4.0 } : { media: 4.4, ultime_30: 4.4 },
+    },
+    team: { operatori: 2, orario: "lun-ven 9-19 (CET), weekend solo urgenze", canali_pct: { "bot di supporto su Telegram": 61, email: 27, "gruppo della community": 12 } },
+    argomenti_pct: conBug
+      ? { "bug: captcha di Security non compare su Android": 27, "configurazione dei bot": 22, "fatturazione, rimborsi e piano annuale": 18, Scribe: 12, "crediti AI": 11, altro: 10 }
+      : { "configurazione dei bot": 28, fatturazione: 22, Scribe: 14, "bug vari": 14, "crediti AI": 12, altro: 10 },
+    segnali: conBug
+      ? [
+          `Dal ${inizioBug} (aggiornamento di Security) molti ticket sul captcha che non compare su Android: è la prima causa di contatto`,
+          "Diversi utenti citano i messaggi di benvenuto ora gratuiti in Telegram quando chiedono di disdire",
+          "Richieste ripetute di un piano annuale più conveniente",
+          "Il tempo di prima risposta è salito con l'arretrato: chi aspetta più di 12 ore dà voti molto più bassi",
+        ]
+      : ["Domande frequenti sulla configurazione iniziale del captcha", "Richieste di più crediti AI inclusi nel Premium"],
+    commenti_utenti: conBug
+      ? [
+          `★☆☆☆☆ «Dal ${new Date(`${inizioBug}T12:00:00Z`).toLocaleDateString("it-IT", { day: "numeric", month: "long" })} il captcha non compare su Android e i nuovi membri restano bloccati» (ripetuto in 41 ticket)`,
+          ...COMMENTI_RECENTI,
+        ]
+      : COMMENTI_NORMALI,
+    serie: serie.map((g) => ({
+      data: g.data,
+      aperti: g.ticket_aperti,
+      chiusi: g.ticket_chiusi,
+      arretrato: g.arretrato,
+      prima_risposta_ore: g.prima_risposta_ore,
+      csat: g.csat,
     })),
   };
 }
