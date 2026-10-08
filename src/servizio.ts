@@ -31,10 +31,10 @@ function inCoda(nome: string, fn: () => Promise<void>): void {
   coda = coda.then(fn).catch((e: unknown) => log.errore(`${nome}: ${descriviErrore(e)}`));
 }
 
-function eseguiComando(lavoro: Lavoro): Promise<void> {
+function eseguiComando(lavoro: Lavoro, argomenti: string[] = []): Promise<void> {
   return new Promise((risolvi) => {
     log.info(`Avvio ${lavoro}`);
-    const figlio = spawn(process.execPath, ["--import", "tsx", path.join(PROJECT_DIR, "src", `${lavoro}.ts`)], {
+    const figlio = spawn(process.execPath, ["--import", "tsx", path.join(PROJECT_DIR, "src", `${lavoro}.ts`), ...argomenti], {
       cwd: PROJECT_DIR,
       stdio: "inherit",
       env: process.env,
@@ -185,7 +185,15 @@ function avviaServer(config: Config): http.Server {
       const chiave =
         (req.headers["x-openwa-idempotency-key"] as string | undefined) ?? evento.idempotencyKey ?? evento.data.id ?? "";
       const messaggio = evento.data;
-      inCoda("comando", () => gestisciMessaggio({ config, log }, messaggio, chiave));
+      inCoda("comando", async () => {
+        const dopo = await gestisciMessaggio({ config, log }, messaggio, chiave);
+        // Lavori chiesti dal gruppo: nella stessa coda della pianificazione, mai in parallelo.
+        if (dopo?.tipo === "invia") await eseguiComando("invia", ["--subito"]);
+        if (dopo?.tipo === "adatta-e-invia") {
+          await eseguiComando("adatta");
+          await eseguiComando("invia", ["--subito", `--sorgente=${dopo.sorgente}`]);
+        }
+      });
     } catch (e) {
       log.errore(`Richiesta non gestita: ${descriviErrore(e)}`);
       if (!res.headersSent) rispondi(500, { errore: "errore interno" });

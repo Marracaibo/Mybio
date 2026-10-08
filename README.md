@@ -361,6 +361,9 @@ Aggiornamenti: `git pull && cd deploy && docker compose up -d --build`. Per Open
    - oppure, **dal gruppo WhatsApp** (con `npm run servizio` attivo, senza citare messaggi): uno screenshot con
      didascalia `adatta`, oppure `adatta: <testo del post>`, oppure `adatta <link a un articolo>`. Il motore lo salva in
      `01-da-adattare/` e risponde nel gruppo. I link a LinkedIn vengono rifiutati: per quelli serve lo screenshot.
+     Con **`adatta subito`** (al posto di `adatta`) la bozza viene creata e mandata nel gruppo appena pronta;
+     se il post viene scartato arriva il motivo. **`manda bozza`** invia ora la prossima bozza in coda.
+     Gli invii chiesti così ignorano il limite di 3 messaggi al giorno e non lo consumano.
 
    In più, alle 07:00 `rss` aggiunge da solo gli articoli nuovi delle newsletter elencate in `fonti.txt`
    (un feed per riga, facoltativo un nome davanti: `Justin Welsh | https://….substack.com/feed`).

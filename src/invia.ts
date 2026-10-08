@@ -10,8 +10,16 @@ import { inizioTesto, oggi, testoSemplice } from "./testo.js";
 
 const log = creaLogger("invia");
 
-/** Regola 7: mai più di 3 messaggi al giorno. */
+/** Regola 7: mai più di 3 messaggi al giorno, salvo invii chiesti a mano. */
 const MASSIMO_MESSAGGI_GIORNO = 3;
+
+/**
+ * --subito: invio chiesto da una persona ("manda bozza" nel gruppo o a mano): ignora il limite giornaliero
+ *   e non lo consuma, così l'invio pianificato delle 8:30 parte comunque.
+ * --sorgente=<file>: manda la bozza nata da quel sorgente; se è stato scartato manda il motivo.
+ */
+const SU_RICHIESTA = process.argv.includes("--subito");
+const SORGENTE = process.argv.find((a) => a.startsWith("--sorgente="))?.slice("--sorgente=".length);
 
 function messaggioContesto(nomeFile: string, bozza: Bozza, conVarianteB: boolean): string {
   const righe = [
@@ -65,7 +73,7 @@ async function main(): Promise<number> {
   const stato = caricaStato();
   const giorno = oggi();
   const inviatiOggi = stato.messaggiPerGiorno[giorno] ?? 0;
-  const disponibili = MASSIMO_MESSAGGI_GIORNO - inviatiOggi;
+  const disponibili = SU_RICHIESTA ? Number.POSITIVE_INFINITY : MASSIMO_MESSAGGI_GIORNO - inviatiOggi;
   if (disponibili <= 0) {
     log.info(`Limite di ${MASSIMO_MESSAGGI_GIORNO} messaggi al giorno già raggiunto: riprovo domani.`);
     return 0;
@@ -78,6 +86,7 @@ async function main(): Promise<number> {
     let bozza: Bozza;
     try {
       bozza = leggiBozza(fs.readFileSync(file, "utf8"));
+      if (SORGENTE && bozza.sorgente !== SORGENTE) continue;
     } catch (e) {
       // Una bozza illeggibile non deve bloccare le altre.
       const motivo = descriviErrore(e);
@@ -137,7 +146,7 @@ async function main(): Promise<number> {
         stato.messaggi[id] = { bozza: nome, parte: parti[inviati] ?? "contesto", inizio: inizioTesto(testo), data: new Date().toISOString() };
       }
       inviati++;
-      stato.messaggiPerGiorno[giorno] = (stato.messaggiPerGiorno[giorno] ?? 0) + 1;
+      if (!SU_RICHIESTA) stato.messaggiPerGiorno[giorno] = (stato.messaggiPerGiorno[giorno] ?? 0) + 1;
       // Completata quando sono partiti contesto e Variante A e tutto ciò che era previsto per oggi.
       const completata = inviati >= 2 && inviati === giaInviati + daInviare.length;
       stato.bozze[nome] = { messaggiInviati: inviati, completata, aggiornato: new Date().toISOString() };
@@ -147,7 +156,25 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  log.info("Nessuna bozza nuova da inviare.");
+  log.info(SORGENTE ? `Nessuna bozza nata da ${SORGENTE}.` : "Nessuna bozza nuova da inviare.");
+  if (SU_RICHIESTA) {
+    // Chi l'ha chiesta deve ricevere comunque una risposta: il motivo dello scarto o la coda vuota.
+    let testo = "📭 Nessuna bozza in coda. Manda un post con \"adatta subito\" per averne una ora.";
+    if (SORGENTE) {
+      testo = `Non è nata nessuna bozza da ${SORGENTE}.`;
+      for (const cartella of [CARTELLE.scartati, CARTELLE.errori]) {
+        const motivo = path.join(sharedDir, cartella, `${SORGENTE}.motivo.txt`);
+        if (fs.existsSync(motivo)) {
+          // Il file motivo inizia con "File:" e "Data:"; il motivo vero è la prima riga dopo.
+          const righe = fs.readFileSync(motivo, "utf8").split("\n").map((r) => r.trim());
+          const riga = righe.find((r) => /^(Scartato|Errore)/i.test(r)) ?? righe.find((r) => r && !/^(File|Data):/.test(r)) ?? "";
+          testo = `🗑️ ${cartella === CARTELLE.scartati ? "Post scartato" : "Errore"}: ${riga.replace(/^Scartato:\s*/i, "")}`;
+          break;
+        }
+      }
+    }
+    await inviaTesto(openwa, testo).catch((e: unknown) => log.errore(`Risposta non inviata: ${descriviErrore(e)}`));
+  }
   return 0;
 }
 

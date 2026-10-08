@@ -64,6 +64,7 @@ export const AIUTO = [
   "",
   "Per proporre un post da adattare scrivi nel gruppo (senza citare niente):",
   "- uno screenshot del post con didascalia: adatta",
+  "Con \"adatta subito\" la bozza arriva qui appena pronta. \"manda bozza\" invia ora la prossima in coda.",
   "- adatta: <testo del post incollato>",
   "- adatta <link a un articolo o newsletter> (LinkedIn no: lì serve lo screenshot)",
 ].join("\n");
@@ -118,63 +119,80 @@ function trovaBozza(sharedDir: string, nome: string): string | undefined {
   return undefined;
 }
 
-const INIZIO_ADATTA = /^\s*adatta\b\s*:?\s*/i;
+const INIZIO_ADATTA = /^\s*adatta\b\s*(subito\b)?\s*:?\s*/i;
+/** "adatta subito": la bozza si crea e arriva nel gruppo appena pronta, senza aspettare il giro del mattino. */
+const ADATTA_SUBITO = /^\s*adatta\s+subito\b/i;
+/** "manda bozza" / "prossima bozza": invia ora la prossima bozza in coda, anche oltre il limite giornaliero. */
+const MANDA_BOZZA = /^\s*((manda|invia)\s+(la\s+)?(prossima\s+)?bozza|prossima\s+bozza)\s*[.!]*\s*$/i;
+
+/** Cosa deve fare il servizio dopo aver gestito un messaggio. */
+export type LavoroDopo = { tipo: "invia" } | { tipo: "adatta-e-invia"; sorgente: string };
 const ESTENSIONI_IMMAGINE: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 
 /**
  * "adatta" nel gruppo: salva in 01-da-adattare/ uno screenshot, un testo incollato o un articolo
  * scaricato da un link. Restituisce il messaggio di risposta per il gruppo.
  */
-async function aggiungiFonte(config: Config, openwa: ConfigOpenWA, msg: MessaggioRicevuto, chat: string): Promise<string> {
+async function aggiungiFonte(
+  config: Config,
+  openwa: ConfigOpenWA,
+  msg: MessaggioRicevuto,
+  chat: string,
+): Promise<{ testo: string; file?: string }> {
   const resto = (msg.body ?? "").replace(INIZIO_ADATTA, "").trim();
   const cartella = path.join(config.SHARED_DIR, CARTELLE.daAdattare);
   fs.mkdirSync(cartella, { recursive: true });
   const base = `whatsapp_${oggi()}_${Date.now()}`;
-  const conferma = `✅ Aggiunto alle fonti: diventa una bozza al prossimo giro delle ${config.ORARIO_ADATTA}.`;
+  const subito = ADATTA_SUBITO.test(msg.body ?? "");
+  const conferma = subito
+    ? "⏳ Ricevuto: preparo la bozza e te la mando qui tra un paio di minuti."
+    : `✅ Aggiunto alle fonti: diventa una bozza al prossimo giro delle ${config.ORARIO_ADATTA}. Per averla subito scrivi "adatta subito".`;
+  const salva = (nome: string, dati: string | Buffer) => {
+    const percorso = percorsoLibero(cartella, nome);
+    fs.writeFileSync(percorso, dati);
+    return { testo: conferma, file: path.basename(percorso) };
+  };
 
   const mime = msg.media?.mimetype ?? "";
   if (msg.type === "image" || mime.startsWith("image/")) {
     const ext = ESTENSIONI_IMMAGINE[mime];
-    if (!ext) return `Formato immagine non supportato (${mime || "sconosciuto"}): manda uno screenshot PNG o JPG.`;
+    if (!ext) return { testo: `Formato immagine non supportato (${mime || "sconosciuto"}): manda uno screenshot PNG o JPG.` };
     const dati =
       msg.media?.data && !msg.media.omitted
         ? Buffer.from(msg.media.data, "base64")
         : msg.id
           ? await scaricaMedia(openwa, chat, msg.id)
           : undefined;
-    if (!dati?.length) return "Non riesco a scaricare l'immagine: riprova a mandarla.";
-    if (dati.length > 5 * 1024 * 1024) return "Immagine troppo grande (massimo 5 MB): manda uno screenshot normale.";
-    fs.writeFileSync(percorsoLibero(cartella, `${base}.${ext}`), dati);
-    return conferma;
+    if (!dati?.length) return { testo: "Non riesco a scaricare l'immagine: riprova a mandarla." };
+    if (dati.length > 5 * 1024 * 1024) return { testo: "Immagine troppo grande (massimo 5 MB): manda uno screenshot normale." };
+    return salva(`${base}.${ext}`, dati);
   }
 
   const link = /^<?(https?:\/\/\S+?)>?$/.exec(resto)?.[1];
   if (link) {
     if (/(^|\.)linkedin\.com$/i.test(new URL(link).hostname)) {
-      return "LinkedIn non si può leggere in automatico: manda uno screenshot del post con didascalia \"adatta\", oppure incolla il testo dopo \"adatta:\".";
+      return { testo: "LinkedIn non si può leggere in automatico: manda uno screenshot del post con didascalia \"adatta\", oppure incolla il testo dopo \"adatta:\"." };
     }
     const risposta = await fetch(link, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; doublegram-linkedin-engine)" },
       signal: AbortSignal.timeout(30_000),
     });
-    if (!risposta.ok) return `Non riesco ad aprire il link (errore ${risposta.status}).`;
+    if (!risposta.ok) return { testo: `Non riesco ad aprire il link (errore ${risposta.status}).` };
     const html = await risposta.text();
     const corpo = /<article[\s\S]*?<\/article>/i.exec(html)?.[0] ?? /<body[\s\S]*<\/body>/i.exec(html)?.[0] ?? html;
     const titolo = htmlInTesto(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? "").trim();
     let testo = htmlInTesto(corpo.replace(/<(script|style|nav|footer|header|aside)[\s\S]*?<\/\1>/gi, " ")).trim();
-    if (testo.length < 300) return "Dal link non ho ricavato un testo utilizzabile: incolla il testo dopo \"adatta:\".";
+    if (testo.length < 300) return { testo: "Dal link non ho ricavato un testo utilizzabile: incolla il testo dopo \"adatta:\"." };
     if (testo.length > config.RSS_MAX_CARATTERI) testo = testo.slice(0, config.RSS_MAX_CARATTERI) + "\n\n[articolo tagliato]";
     const intestazione = [`link: ${link}`, "tipo: newsletter", "---", titolo].filter(Boolean).join("\n");
-    fs.writeFileSync(percorsoLibero(cartella, `${base}.md`), `${intestazione}\n\n${testo}\n`, "utf8");
-    return conferma;
+    return salva(`${base}.md`, `${intestazione}\n\n${testo}\n`);
   }
 
   if (resto.length >= 80) {
     // Il testo può iniziare con "autore: Nome" e "link: …" (vedi leggiTestoSorgente).
-    fs.writeFileSync(percorsoLibero(cartella, `${base}.txt`), resto + "\n", "utf8");
-    return conferma;
+    return salva(`${base}.txt`, resto + "\n");
   }
-  return "Dopo \"adatta\" metti uno screenshot, un link a un articolo o il testo del post (almeno qualche riga).";
+  return { testo: "Dopo \"adatta\" metti uno screenshot, un link a un articolo o il testo del post (almeno qualche riga)." };
 }
 
 export interface ServizioComandi {
@@ -186,7 +204,11 @@ export interface ServizioComandi {
  * Gestisce un messaggio ricevuto nel gruppo. Ignora in silenzio tutto ciò che non è una risposta
  * a una bozza inviata dal sistema e contenente un comando.
  */
-export async function gestisciMessaggio(srv: ServizioComandi, msg: MessaggioRicevuto, chiave: string): Promise<void> {
+export async function gestisciMessaggio(
+  srv: ServizioComandi,
+  msg: MessaggioRicevuto,
+  chiave: string,
+): Promise<LavoroDopo | undefined> {
   const { config, log } = srv;
   const openwa = configOpenWA(config);
   const chat = msg.chatId ?? msg.from;
@@ -203,6 +225,13 @@ export async function gestisciMessaggio(srv: ServizioComandi, msg: MessaggioRice
     if (registri.some((r) => Object.values(r).some((m) => m.inizio && m.inizio === inizio))) return;
   }
 
+  if (!msg.quotedMessage && MANDA_BOZZA.test(msg.body ?? "")) {
+    statoComandi.elaborati.push(chiave);
+    salvaStatoComandi(statoComandi);
+    log.info("Richiesta dal gruppo: manda subito la prossima bozza");
+    return { tipo: "invia" };
+  }
+
   if (!msg.quotedMessage && INIZIO_ADATTA.test(msg.body ?? "")) {
     const giorno = oggi();
     if ((statoComandi.perGiorno[giorno] ?? 0) >= config.COMANDI_MAX_GIORNO) {
@@ -212,16 +241,18 @@ export async function gestisciMessaggio(srv: ServizioComandi, msg: MessaggioRice
     statoComandi.elaborati.push(chiave);
     statoComandi.perGiorno[giorno] = (statoComandi.perGiorno[giorno] ?? 0) + 1;
     salvaStatoComandi(statoComandi);
-    let risposta: string;
+    let esito: { testo: string; file?: string };
     try {
-      risposta = await aggiungiFonte(config, openwa, msg, chat);
+      esito = await aggiungiFonte(config, openwa, msg, chat);
     } catch (e) {
-      risposta = `Non sono riuscito ad aggiungere la fonte (${descriviErrore(e)}).`;
+      esito = { testo: `Non sono riuscito ad aggiungere la fonte (${descriviErrore(e)}).` };
     }
+    const risposta = esito.testo;
     log.info(`Fonte dal gruppo: ${risposta}`);
     await inviaTesto(openwa, risposta, msg.id ? { quotedMessageId: msg.id } : {}).catch(async () => {
       await inviaTesto(openwa, risposta);
     });
+    if (esito.file && ADATTA_SUBITO.test(msg.body ?? "")) return { tipo: "adatta-e-invia", sorgente: esito.file };
     return;
   }
 
