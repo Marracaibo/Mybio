@@ -105,7 +105,11 @@ services:
     profiles: ["disabled"]
 YAML
 touch "$OPENWA_DIR/.env"
-for riga in "ENGINE_TYPE=whatsapp-web.js" "SSRF_ALLOWED_HOSTS=motore" "TZ=Europe/Rome"; do
+# AUTO_START_SESSIONS: dopo un riavvio del server (o di OpenWA) WhatsApp si ricollega da solo.
+# MESSAGE_RETENTION_DAYS=1: OpenWA cancella dopo un giorno la copia dei messaggi ricevuti
+# (con un numero personale passano anche le chat private: meglio non tenerle).
+for riga in "ENGINE_TYPE=whatsapp-web.js" "SSRF_ALLOWED_HOSTS=motore" "TZ=Europe/Rome" \
+  "AUTO_START_SESSIONS=true" "MESSAGE_RETENTION_DAYS=1"; do
   chiave="${riga%%=*}"
   if grep -qE "^$chiave=" "$OPENWA_DIR/.env"; then
     sed -i "s|^$chiave=.*|$riga|" "$OPENWA_DIR/.env"
