@@ -21,6 +21,8 @@ const EnvSchema = z.object({
   CLAUDE_MODEL: z.preprocess(vuotoComeAssente, z.string().default("claude-sonnet-5-5")),
   CLAUDE_MODEL_CONTROLLI: z.preprocess(vuotoComeAssente, z.string().default("claude-haiku-5-5")),
   CLAUDE_MODEL_VERIFICA: z.preprocess(vuotoComeAssente, z.string().default("claude-sonnet-5-5")),
+  /** Il maggiordomo /schiavo: agente con strumenti, il modello più capace. */
+  CLAUDE_MODEL_SCHIAVO: z.preprocess(vuotoComeAssente, z.string().default("claude-opus-5-5")),
   CLAUDE_EFFORT_CONTROLLI: z.preprocess(vuotoComeAssente, z.enum(["low", "medium", "high"]).default("low")),
   CLAUDE_FALLBACK: z.preprocess(vuotoComeAssente, z.enum(["default", "off"]).default("default")),
   SHARED_DIR: z.preprocess(vuotoComeAssente, z.string().default("G:\\Il mio Drive\\Doublegram-LinkedIn")),

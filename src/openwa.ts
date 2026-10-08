@@ -159,6 +159,41 @@ export async function scaricaMedia(cfg: ConfigOpenWA, chatId: string, messageId:
   return Buffer.from(await risposta.arrayBuffer());
 }
 
+/** Reazione a un messaggio del gruppo (emoji vuota per toglierla). Errori ignorati: è solo cortesia. */
+export async function reagisci(cfg: ConfigOpenWA, messageId: string, emoji: string): Promise<void> {
+  await richiesta(cfg, "POST", "/messages/react", { chatId: cfg.gruppo, messageId, emoji }).catch(() => undefined);
+}
+
+/**
+ * Mostra "sta scrivendo…" nel gruppo finché `lavoro` non finisce (WhatsApp lo spegne da solo dopo ~25 s,
+ * quindi lo ripeto). Errori ignorati.
+ */
+export async function scrivendoMentre<T>(cfg: ConfigOpenWA, lavoro: () => Promise<T>): Promise<T> {
+  const segnala = (state: string) =>
+    richiesta(cfg, "POST", "/chats/typing", { chatId: cfg.gruppo, state }).catch(() => undefined);
+  void segnala("typing");
+  const timer = setInterval(() => void segnala("typing"), 20_000);
+  try {
+    return await lavoro();
+  } finally {
+    clearInterval(timer);
+    void segnala("paused");
+  }
+}
+
+/** Come scaricaMedia, con il tipo dichiarato da OpenWA. */
+export async function scaricaMediaConTipo(
+  cfg: ConfigOpenWA,
+  chatId: string,
+  messageId: string,
+): Promise<{ dati: Buffer; mimetype: string }> {
+  const url = `${cfg.url}/api/sessions/${encodeURIComponent(cfg.sessione)}/messages/${encodeURIComponent(chatId)}/${encodeURIComponent(messageId)}/media`;
+  const risposta = await fetch(url, { headers: { "X-API-Key": cfg.apiKey }, signal: AbortSignal.timeout(60_000) });
+  if (!risposta.ok) throw new Error(`OpenWA ha risposto ${risposta.status} scaricando l'allegato`);
+  const mimetype = (risposta.headers.get("content-type") ?? "").split(";")[0]?.trim() ?? "";
+  return { dati: Buffer.from(await risposta.arrayBuffer()), mimetype };
+}
+
 export async function elencaGruppi(cfg: ConfigOpenWA): Promise<unknown> {
   return richiesta(cfg, "GET", "/groups");
 }

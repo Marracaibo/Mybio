@@ -5,8 +5,9 @@ import { chiediJson, creaClient } from "./claude.js";
 import { DATI_DIR, type Config } from "./config.js";
 import type { Logger } from "./log.js";
 import { descriviErrore } from "./log.js";
-import { configOpenWA, inviaTesto, richiesta, scaricaMedia, type ConfigOpenWA } from "./openwa.js";
+import { configOpenWA, inviaTesto, reagisci, richiesta, scaricaMedia, scrivendoMentre, type ConfigOpenWA } from "./openwa.js";
 import { lavoraPost, lavoroCitato } from "./post.js";
+import { chiediSchiavo, conversazioneCitata, rispondiSchiavo, scaricaAllegato, type Allegato } from "./schiavo.js";
 import { oggi } from "./testo.js";
 
 /**
@@ -15,7 +16,8 @@ import { oggi } from "./testo.js";
  * - Scribe: trascrive i vocali del gruppo (Whisper via API compatibile OpenAI, di default Groq);
  * - Lookup: /lookup <numero> o con @menzione → informazioni pubbliche sull'account WhatsApp;
  * - Security: antilink e parole vietate, spento finché qualcuno non scrive /security on;
- * - Shop: /shop, /aggiungi, /carrello, /ordina con i piani veri di Doublegram.
+ * - Shop: /shop, /aggiungi, /carrello, /ordina con i piani veri di Doublegram;
+ * - il maggiordomo: /schiavo o /jarvis (vedi schiavo.ts), anche a voce con un vocale che inizia con "Jarvis".
  * Nessun messaggio privato: tutto avviene nel gruppo.
  */
 
@@ -30,6 +32,7 @@ export interface MessaggioDoublegram {
   mentionedIds?: string[];
   media?: { mimetype?: string; data?: string; omitted?: boolean };
   quotedMessage?: { id?: string; body?: string };
+  contact?: { pushName?: string; name?: string };
 }
 
 // ---------- Stato ----------
@@ -172,6 +175,7 @@ const MENU = [
   "*Lookup*  /lookup <numero> oppure /lookup @persona – info sull'account WhatsApp",
   "*Security*  /security on | off | stato · /vieta <parola> · /consenti <parola>",
   "*Shop*  /shop · /aggiungi <n> [quantità] · /togli <n> · /carrello · /svuota · /ordina",
+  "*Jarvis*  /schiavo <richiesta> (o /jarvis, o un vocale che inizia con \"Jarvis\") – il maggiordomo: cerca sul web, legge la chat, guarda foto e PDF citati, manda card, sondaggi e promemoria",
   "",
   "Il motore LinkedIn resta com'è: adatta, adatta subito, manda bozza, aiuto (citando una bozza).",
 ].join("\n");
@@ -341,6 +345,49 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
     return true;
   };
 
+  // --- Il maggiordomo
+  const chi = msg.fromMe ? "il Padrone (il titolare del numero collegato)" : (msg.contact?.name ?? msg.contact?.pushName ?? soloCifre(msg.author ?? msg.from ?? ""));
+  const schiavo = async (richiestaTesto: string, opzioni: { precedenti?: Parameters<typeof chiediSchiavo>[2]["precedenti"]; trascrizione?: string } = {}) => {
+    if (!sottoTetto()) {
+      salvaStato(stato);
+      await rispondi("🎩 Perdoni, Signore: per oggi ho esaurito le energie concessemi. Riprovi domani.");
+      return;
+    }
+    salvaStato(stato);
+    if (msg.id) void reagisci(openwa, msg.id, "🎩");
+    try {
+      let allegato: Allegato | undefined;
+      let trascrizione = opzioni.trascrizione;
+      if (msg.id && ["image", "document"].includes(msg.type ?? "")) allegato = await scaricaAllegato(openwa, chat ?? "", msg.id);
+      else if (msg.quotedMessage?.id && !opzioni.precedenti) {
+        const a = await scaricaAllegato(openwa, chat ?? "", msg.quotedMessage.id);
+        if (a?.mimetype.startsWith("audio/")) trascrizione = await trascrivi(config, a.dati, a.mimetype).catch(() => undefined);
+        else allegato = a;
+      }
+      const citato = opzioni.precedenti ? undefined : msg.quotedMessage?.body;
+      const { risposta, scambi } = await scrivendoMentre(openwa, () =>
+        chiediSchiavo({ config, log, openwa, chi }, richiestaTesto, { precedenti: opzioni.precedenti, allegato, trascrizione, citato }),
+      );
+      await rispondiSchiavo(openwa, risposta, scambi, msg.id);
+      log.info(`Schiavo: risposto (${risposta.length} caratteri)`);
+    } catch (e) {
+      log.errore(`Schiavo: ${descriviErrore(e)}`);
+      await rispondi(`🎩 Chiedo venia, Signore, qualcosa è andato storto: ${descriviErrore(e)}`);
+    } finally {
+      if (msg.id) void reagisci(openwa, msg.id, "");
+    }
+  };
+
+  // --- Risposta citando il maggiordomo: si prosegue la conversazione
+  if (!comando && testo && msg.quotedMessage) {
+    const precedenti = conversazioneCitata(msg.quotedMessage);
+    if (precedenti) {
+      segna();
+      await schiavo(testo, { precedenti });
+      return true;
+    }
+  }
+
   // --- Post del canale: risposta citando le domande, la card o il testo di un post
   if (!comando && testo && msg.quotedMessage) {
     const lavoro = lavoroCitato(msg.quotedMessage);
@@ -386,6 +433,12 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
       const trascritto = await trascrivi(config, audio, msg.media?.mimetype ?? "audio/ogg");
       log.info(`Scribe: vocale trascritto (${trascritto.length} caratteri)`);
       await rispondi(trascritto ? `🎙️ ${trascritto}` : "🎙️ (vocale senza parole riconoscibili)");
+      // "Jarvis, …" / "Schiavo, …" a voce: la richiesta va al maggiordomo.
+      const chiamata = /^\W*(jarvis|giarvis|schiavo)\b[\s,.:;!?]*/i.exec(trascritto);
+      if (chiamata) {
+        const precedenti = conversazioneCitata(msg.quotedMessage);
+        await schiavo(trascritto.slice(chiamata[0].length), { precedenti, trascrizione: undefined });
+      }
     } catch (e) {
       log.errore(`Scribe: ${descriviErrore(e)}`);
       const locale = /\/trascrivi\/?$/.test(config.SCRIBE_URL);
@@ -419,7 +472,7 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
   // --- Comandi
   const nome = (comando[1] ?? "").toLowerCase();
   const argomento = (comando[2] ?? "").trim();
-  const noti = ["doublegram", "aiuto", "help", "menu", "ai", "post", "lookup", "scribe", "security", "vieta", "consenti", "shop", "aggiungi", "togli", "carrello", "svuota", "ordina"];
+  const noti = ["doublegram", "aiuto", "help", "menu", "ai", "post", "lookup", "scribe", "security", "vieta", "consenti", "shop", "aggiungi", "togli", "carrello", "svuota", "ordina", "schiavo", "jarvis"];
   if (!noti.includes(nome)) return false;
   segna();
   const cliente = msg.fromMe ? "io" : soloCifre(msg.author ?? msg.from ?? "") || "sconosciuto";
@@ -448,6 +501,19 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
         salvaStato(stato);
         const r = await rispondiAI(config, argomento || "Riassumi e commenta questo messaggio.", msg.quotedMessage?.body);
         await rispondi(`🤖 ${r}`);
+        return true;
+      }
+
+      case "schiavo":
+      case "jarvis": {
+        if (!argomento && !msg.quotedMessage && !["image", "document"].includes(msg.type ?? "")) {
+          salvaStato(stato);
+          await rispondi(
+            "🎩 Ai suoi ordini, Signore. Mi dica pure: /schiavo cosa mi sono perso oggi? · /schiavo cerca le ultime novità di Telegram · /schiavo fai un sondaggio per la cena di venerdì · /schiavo ricordami domani alle 9 di chiamare il commercialista. Posso anche guardare foto e PDF, se me li cita.",
+          );
+          return true;
+        }
+        await schiavo(argomento, { precedenti: conversazioneCitata(msg.quotedMessage) });
         return true;
       }
 

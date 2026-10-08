@@ -409,6 +409,7 @@ Con `npm run servizio` attivo, nel gruppo configurato funzionano anche le versio
 | `/lookup <numero>` o `/lookup @persona` | nome pubblico, foto, rubrica: utile per riconoscere i cloni |
 | `/security on` / `off` / `stato`, `/vieta <parola>`, `/consenti <parola>` | rimuove link e parole vietate scritti da chi non è admin (il numero collegato deve essere admin). Spento di default |
 | `/shop`, `/aggiungi <n>`, `/togli <n>`, `/carrello`, `/svuota`, `/ordina` | i piani veri di Doublegram, carrello e ordine con il link per attivarlo |
+| `/schiavo <richiesta>` o `/jarvis …`, o un vocale che inizia con "Jarvis" | il maggiordomo (`src/schiavo.ts`, `CLAUDE_MODEL_SCHIAVO`, di default Opus 5.5): risponde da maggiordomo e usa strumenti veri, cioè ricerca web e lettura di link, lettura della chat ("cosa mi sono perso?"), foto, PDF e vocali citati, card, sondaggi, promemoria a orario, post per il canale e note da ricordare. Mentre lavora mette 🎩 sul messaggio e mostra "sta scrivendo…". Citando una sua risposta si continua la conversazione |
 
 Tutto resta nel gruppo: nessun messaggio privato. I prezzi vengono da doublegram.com/pricing; per cambiarli
 metti un `catalogo-doublegram.json` nella cartella condivisa. Tetto giornaliero: `DOUBLEGRAM_MAX_GIORNO`.
