@@ -1,5 +1,5 @@
 import path from "node:path";
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { toFile } from "@anthropic-ai/sdk";
 import { creaClient } from "./claude.js";
 import type { Config } from "./config.js";
 
@@ -41,15 +41,35 @@ function fileProdotti(contenuto: unknown, ids: string[] = []): string[] {
 
 export async function creaFile(
   config: Config,
-  richiesta: { tipo: TipoFile; nomeFile: string; istruzioni: string },
+  richiesta: {
+    tipo: TipoFile;
+    nomeFile: string;
+    istruzioni: string;
+    /** testi lunghi (es. un rapporto) da mettere nella sandbox come file, invece di farli ricopiare a Claude */
+    allegati?: Array<{ nome: string; testo: string }>;
+  },
   avanzamento?: (passo: string) => void,
 ): Promise<FileCreato> {
   const client = creaClient(config);
   const nome = `${path.basename(richiesta.nomeFile).replace(/\.[a-z0-9]+$/i, "").replace(/[^\p{L}\p{N}_ -]/gu, "").trim() || "documento"}.${richiesta.tipo}`;
+  const caricati: Anthropic.Beta.BetaContentBlockParam[] = [];
+  for (const a of richiesta.allegati ?? []) {
+    const f = await client.files.upload({ file: await toFile(Buffer.from(a.testo, "utf8"), a.nome, { type: "text/markdown" }) });
+    caricati.push({ type: "container_upload", file_id: f.id });
+  }
+  const testoAllegati = richiesta.allegati?.length
+    ? `\n\nI testi da usare sono nei file caricati nella sandbox: ${richiesta.allegati.map((a) => a.nome).join(", ")}. Leggili da lì con il codice e riportali fedelmente, senza ricopiarli a mano.`
+    : "";
   let messaggi: Anthropic.Beta.BetaMessageParam[] = [
     {
       role: "user",
-      content: `Crea il file "${nome}" (${richiesta.tipo.toUpperCase()}) e salvalo come output.\n\n${STILE}\n\nContenuto e istruzioni:\n${richiesta.istruzioni}\n\nUsa SOLO i dati e i fatti forniti qui: non inventare numeri. Controlla il file prima di consegnarlo. Alla fine scrivi in una o due frasi cosa contiene.`,
+      content: [
+        ...caricati,
+        {
+          type: "text",
+          text: `Crea il file "${nome}" (${richiesta.tipo.toUpperCase()}) e salvalo come output.\n\n${STILE}\n\nContenuto e istruzioni:\n${richiesta.istruzioni}${testoAllegati}\n\nUsa SOLO i dati e i fatti forniti: non inventare numeri. Controlla il file prima di consegnarlo. Alla fine scrivi in una o due frasi cosa contiene.`,
+        },
+      ],
     },
   ];
   let container: string | undefined;
@@ -69,6 +89,7 @@ export async function creaFile(
     messaggi = [...messaggi, { role: "assistant", content: risposta.content }];
   }
   if (!risposta) throw new Error("nessuna risposta da Claude");
+  if (risposta.stop_reason === "max_tokens") throw new Error("Claude ha finito lo spazio prima di completare il file");
   if (risposta.stop_reason === "refusal") throw new Error("Claude ha rifiutato di creare questo file");
   const ids = fileProdotti(risposta.content);
   avanzamento?.("📥 Scarico il file");
@@ -86,5 +107,5 @@ export async function creaFile(
     const nota = testo.slice(0, taglio > 100 ? taglio + 1 : 500).trim();
     return { nome, mimetype: MIME[richiesta.tipo], dati, nota };
   }
-  throw new Error(`Claude non ha prodotto un file .${richiesta.tipo}`);
+  throw new Error(`Claude non ha prodotto un file .${richiesta.tipo} (fine: ${risposta.stop_reason})`);
 }

@@ -125,10 +125,20 @@ ${risultati.join("\n\n")}`,
       {
         tipo: "pdf",
         nomeFile: base,
-        istruzioni: `Impagina questo rapporto come PDF professionale: copertina con titolo "${piano.titolo}", data ${oggi()} e "Ricerca di Jarvis per Doublegram"; indice; titoli e tabelle curate; numeri di pagina; fonti in fondo con link cliccabili. Il testo va riportato fedelmente.\n\n${rapporto}`,
+        istruzioni: `Impagina il rapporto (file rapporto.md, in Markdown) come PDF professionale: copertina con titolo "${piano.titolo}", data ${oggi()} e "Ricerca di Jarvis per Doublegram"; indice; titoli, elenchi e tabelle curati; numeri di pagina; fonti in fondo con link cliccabili. Il testo va riportato fedelmente e per intero.`,
+        allegati: [{ nome: "rapporto.md", testo: rapporto }],
       },
       (p) => progresso.passo(p),
-    );
+    ).catch(async (e: unknown) => {
+      // Ripiego: il rapporto c'è comunque, lo mando come testo.
+      log.avviso(`Ricerca: PDF non riuscito (${descriviErrore(e)}), mando il rapporto in Markdown`);
+      await inviaDocumento(openwa, Buffer.from(rapporto, "utf8"), `${base}.md`, "text/markdown", `📄 ${piano.titolo} (testo)`);
+      return undefined;
+    });
+    if (!pdf) {
+      await progresso.fine(`🧭 *${piano.titolo}*\n\nIl rapporto è pronto, Signore, ma l'impaginazione in PDF non è riuscita: le mando il testo completo qui sotto (salvato anche in 07-ricerche/).`);
+      return;
+    }
     fs.writeFileSync(path.join(cartella, `${base}.pdf`), pdf.dati);
     await inviaDocumento(openwa, pdf.dati, `${base}.pdf`, pdf.mimetype, `📄 ${piano.titolo}`);
     const sintesi = /##\s*Sintesi[\s\S]*?(?=\n##\s)/i.exec(rapporto)?.[0]?.replace(/^##\s*Sintesi\s*/i, "").trim() ?? "";
