@@ -5,12 +5,23 @@ import { chiediJson, creaClient } from "./claude.js";
 import { DATI_DIR, type Config } from "./config.js";
 import type { Logger } from "./log.js";
 import { descriviErrore } from "./log.js";
-import { configOpenWA, inviaTesto, reagisci, richiesta, scaricaMedia, scrivendoMentre, type ConfigOpenWA } from "./openwa.js";
+import {
+  configOpenWA,
+  idInviatoDaQui,
+  inviatoDaQui,
+  inviaTesto,
+  reagisci,
+  richiesta,
+  scaricaMedia,
+  scrivendoMentre,
+  type ConfigOpenWA,
+} from "./openwa.js";
 import { lavoraPost, lavoroCitato } from "./post.js";
 import {
   chiediSchiavo,
   conversazioneCitata,
   eseguiBriefing,
+  ricordaTrascrizione,
   rispondiSchiavo,
   salvaDossier,
   scaricaAllegato,
@@ -335,7 +346,12 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
   if (chat !== openwa.gruppo) return false;
 
   const testo = (msg.body ?? "").trim();
-  const comando = /^\/([a-z]+)\b\s*([\s\S]*)$/i.exec(testo);
+  // Eco dei messaggi spediti dal motore stesso (numero personale): mai trattarli come comandi.
+  if (msg.fromMe && testo && inviatoDaQui(testo)) return false;
+  // /schiavo e /jarvis valgono anche in mezzo al messaggio ("Stai zitto /schiavo …"): la richiesta è tutto il testo.
+  const comando =
+    /^\/([a-z]+)\b\s*([\s\S]*)$/i.exec(testo) ??
+    (/(^|\s)\/(schiavo|jarvis)\b/i.test(testo) ? ["", "schiavo", testo.replace(/\/(schiavo|jarvis)\b/gi, "…").trim()] : null);
   const vocale = ["voice", "audio", "ptt"].includes(msg.type ?? "") || (msg.media?.mimetype ?? "").startsWith("audio/");
   const stato = caricaStato();
   if (chiave && stato.elaborati.includes(chiave)) return Boolean(comando) || vocale;
@@ -436,11 +452,19 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
   // --- Scribe: vocali (anche i propri)
   if (vocale && !comando) {
     segna();
-    if (!stato.scribe.attiva) {
+    // I vocali del maggiordomo tornano indietro come propri: non vanno trascritti.
+    if (msg.fromMe && msg.id && idInviatoDaQui(msg.id)) {
       salvaStato(stato);
       return true;
     }
-    if (!sottoTetto()) {
+    // Con Scribe spento il vocale si trascrive lo stesso, in silenzio, solo se Whisper è sul server (gratis):
+    // serve a sentire se chiamano Jarvis (o rispondono a lui) e a dargli il contenuto dei vocali in leggi_chat.
+    const locale = /\/trascrivi\/?$/.test(config.SCRIBE_URL);
+    if (!stato.scribe.attiva && !locale) {
+      salvaStato(stato);
+      return true;
+    }
+    if (stato.scribe.attiva && !sottoTetto()) {
       salvaStato(stato);
       log.avviso("Doublegram: tetto giornaliero raggiunto, vocale non trascritto");
       return true;
@@ -455,8 +479,9 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
             : Buffer.alloc(0);
       if (!audio.length) throw new Error("audio non disponibile");
       const trascritto = await trascrivi(config, audio, msg.media?.mimetype ?? "audio/ogg");
-      log.info(`Scribe: vocale trascritto (${trascritto.length} caratteri)`);
-      await rispondi(trascritto ? `🎙️ ${trascritto}` : "🎙️ (vocale senza parole riconoscibili)");
+      log.info(`Scribe: vocale trascritto (${trascritto.length} caratteri)${stato.scribe.attiva ? "" : " in silenzio"}`);
+      if (msg.id && trascritto) ricordaTrascrizione(msg.id, trascritto);
+      if (stato.scribe.attiva) await rispondi(trascritto ? `🎙️ ${trascritto}` : "🎙️ (vocale senza parole riconoscibili)");
       // "Jarvis, …" / "Schiavo, …" a voce, o un vocale che risponde al maggiordomo: risponde con un vocale.
       const chiamata = /^\W*(jarvis|giarvis|schiavo)\b[\s,.:;!?]*/i.exec(trascritto);
       const precedenti = conversazioneCitata(msg.quotedMessage);
@@ -465,7 +490,7 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
       }
     } catch (e) {
       log.errore(`Scribe: ${descriviErrore(e)}`);
-      const locale = /\/trascrivi\/?$/.test(config.SCRIBE_URL);
+      if (!stato.scribe.attiva) return true;
       if (!locale && !config.GROQ_API_KEY) return true; // non configurato: niente messaggi d'errore nel gruppo
       await rispondi(`🎙️ Non sono riuscito a trascrivere questo vocale (${descriviErrore(e)}).`);
     }

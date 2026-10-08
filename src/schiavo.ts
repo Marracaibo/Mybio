@@ -38,6 +38,8 @@ interface Promemoria {
 }
 
 interface StatoSchiavo {
+  /** trascrizioni dei vocali del gruppo (chiave: parte centrale dell'id), per leggi_chat */
+  trascrizioni?: Record<string, string>;
   /** data (YYYY-MM-DD) dell'ultimo briefing automatico */
   ultimoBriefing?: string;
   note: string[];
@@ -51,7 +53,7 @@ const FILE_STATO = path.join(DATI_DIR, ".schiavo.json");
 function caricaStato(): StatoSchiavo {
   try {
     const d = JSON.parse(fs.readFileSync(FILE_STATO, "utf8")) as Partial<StatoSchiavo>;
-    return { ultimoBriefing: d.ultimoBriefing, note: d.note ?? [], promemoria: d.promemoria ?? [], conversazioni: d.conversazioni ?? {} };
+    return { ultimoBriefing: d.ultimoBriefing, trascrizioni: d.trascrizioni ?? {}, note: d.note ?? [], promemoria: d.promemoria ?? [], conversazioni: d.conversazioni ?? {} };
   } catch {
     return { note: [], promemoria: [], conversazioni: {} };
   }
@@ -73,6 +75,14 @@ const chiaveId = (id: string) => {
   const parti = id.split("_");
   return parti.length >= 3 ? (parti[2] ?? id) : id;
 };
+
+/** Salva la trascrizione di un vocale, così il maggiordomo sa cosa dice quando legge la chat. */
+export function ricordaTrascrizione(id: string, testo: string): void {
+  const stato = caricaStato();
+  const voci = Object.entries({ ...stato.trascrizioni, [chiaveId(id)]: testo.slice(0, 2000) }).slice(-300);
+  stato.trascrizioni = Object.fromEntries(voci);
+  salvaStato(stato);
+}
 
 /** La conversazione a cui appartiene una risposta del maggiordomo citata, se c'è. */
 export function conversazioneCitata(citato: { id?: string; body?: string } | undefined): Scambio[] | undefined {
@@ -198,7 +208,9 @@ interface Contesto {
 
 async function leggiChat(openwa: ConfigOpenWA, quanti: number): Promise<string> {
   const n = Math.max(10, Math.min(100, Math.trunc(quanti) || 40));
+  const { trascrizioni = {} } = caricaStato();
   const storico = (await richiesta(openwa, "GET", `/messages/${encodeURIComponent(openwa.gruppo)}/history?limit=${n}`)) as Array<{
+    id?: string;
     body?: string;
     type?: string;
     fromMe?: boolean;
@@ -213,7 +225,8 @@ async function leggiChat(openwa: ConfigOpenWA, quanti: number): Promise<string> 
         ? new Date(m.timestamp * 1000).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
         : "";
       const autore = m.fromMe ? "Padrone (numero collegato) o bot" : (m.contact?.name ?? m.contact?.pushName ?? m.author ?? "?");
-      const testo = m.body?.trim() || `[${m.type ?? "messaggio"}]`;
+      const trascritto = m.id ? trascrizioni[chiaveId(m.id)] : undefined;
+      const testo = trascritto ? `[vocale] ${trascritto}` : m.body?.trim() || `[${m.type ?? "messaggio"}]`;
       return `[${ora}] ${autore}: ${testo.slice(0, 600)}`;
     })
     .join("\n");
@@ -456,6 +469,12 @@ export async function chiediSchiavo(
       output_config: { effort: "medium" },
       ...(fallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
     });
+    for (const blocco of risposta.content) {
+      if ((blocco.type === "web_search_tool_result" || blocco.type === "web_fetch_tool_result") && !Array.isArray(blocco.content)) {
+        const errore = (blocco.content as { error_code?: string }).error_code;
+        if (errore) log.avviso(`Schiavo: ${blocco.type} errore ${errore}`);
+      }
+    }
     if (risposta.stop_reason === "pause_turn") {
       messaggi.push({ role: "assistant", content: risposta.content });
       continue;
@@ -490,6 +509,7 @@ export async function chiediSchiavo(
       .join("")
       .trim();
   }
+  testo = testo.replace(/^\s*(🎩\s*)+/u, ""); // il cappello lo aggiunge rispondiSchiavo
   if (!testo) testo = "Fatto, Signore.";
   const scambi = [...(opzioni.precedenti ?? []), { domanda: righe.slice(1).join("\n\n"), risposta: testo }].slice(-8);
   return { risposta: testo, scambi };

@@ -85,6 +85,18 @@ export function inviatoDaQui(testo: string): boolean {
   return inviatiDiRecente.includes(inizioInviato(testo));
 }
 
+/** Id dei vocali e delle immagini spediti da questo processo (anche loro tornano indietro come message.sent). */
+const idInviati: string[] = [];
+const chiaveMessaggio = (id: string) => id.split("_")[2] ?? id;
+function ricordaId(id: string | undefined): void {
+  if (!id) return;
+  idInviati.push(chiaveMessaggio(id));
+  if (idInviati.length > 200) idInviati.shift();
+}
+export function idInviatoDaQui(id: string): boolean {
+  return idInviati.includes(chiaveMessaggio(id));
+}
+
 /**
  * Il messaggio citato da un proprio messaggio. Con il numero personale le risposte scritte dal telefono
  * arrivano come message.sent, e OpenWA (whatsapp-web.js) non vi mette la citazione: la leggo dallo storico
@@ -148,6 +160,7 @@ export async function inviaImmagine(cfg: ConfigOpenWA, png: Buffer, didascalia?:
   if (didascalia) corpo["caption"] = didascalia.slice(0, 1024);
   const risposta = await richiesta(cfg, "POST", "/messages/send-image", corpo);
   const id = (risposta as { messageId?: unknown } | null)?.messageId;
+  ricordaId(typeof id === "string" ? id : undefined);
   return typeof id === "string" ? id : undefined;
 }
 
@@ -162,6 +175,7 @@ export async function inviaVocale(cfg: ConfigOpenWA, ogg: Buffer, quotedMessageI
   if (quotedMessageId) corpo["quotedMessageId"] = quotedMessageId;
   const risposta = await richiesta(cfg, "POST", "/messages/send-audio", corpo);
   const id = (risposta as { messageId?: unknown } | null)?.messageId;
+  ricordaId(typeof id === "string" ? id : undefined);
   return typeof id === "string" ? id : undefined;
 }
 
