@@ -77,12 +77,13 @@ export async function creaFile(
     if (!meta.filename.toLowerCase().endsWith(`.${richiesta.tipo}`)) continue;
     const scaricato = await client.files.download(id);
     const dati = Buffer.from(await scaricato.arrayBuffer());
-    const nota = risposta.content
-      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-      .trim()
-      .slice(-600);
+    // Nota per il gruppo: l'ultimo testo di Claude, in grassetto WhatsApp, tagliato a fine frase.
+    const testo = (risposta.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text").at(-1)?.text ?? "")
+      .replace(/\*\*(.+?)\*\*/g, "*$1*")
+      .replace(/^#+\s*/gm, "")
+      .trim();
+    const taglio = testo.length <= 500 ? testo.length : Math.max(testo.lastIndexOf(". ", 500), testo.lastIndexOf("\n", 500));
+    const nota = testo.slice(0, taglio > 100 ? taglio + 1 : 500).trim();
     return { nome, mimetype: MIME[richiesta.tipo], dati, nota };
   }
   throw new Error(`Claude non ha prodotto un file .${richiesta.tipo}`);
