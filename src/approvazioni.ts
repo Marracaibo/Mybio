@@ -78,7 +78,7 @@ async function esegui(ctx: { config: Config; openwa: ConfigOpenWA }, p: Proposta
       return aggiungiPromemoria(String(par["quando"] ?? ""), String(par["testo"] ?? ""), chi);
     }
     case "compito":
-      return creaCompito({
+      return `${creaCompito({
         titolo: String(par["titolo"] ?? p.descrizione),
         descrizione: String(par["descrizione"] ?? ""),
         assegnatario: par["assegnatario"] ? String(par["assegnatario"]) : undefined,
@@ -89,7 +89,9 @@ async function esegui(ctx: { config: Config; openwa: ConfigOpenWA }, p: Proposta
         criteri_accettazione: Array.isArray(par["criteri_accettazione"]) ? par["criteri_accettazione"].map(String) : undefined,
         file_coinvolti: Array.isArray(par["file_coinvolti"]) ? par["file_coinvolti"].map(String) : undefined,
         autore: chi,
-      });
+      })
+        .replace(/^LINEAR SIMULATO[^.]*\.\s*Creato:\s*/, "creato ")
+        .replace(/^LINEAR SIMULATO[^.]*\.\s*/, "")} (Linear simulato)`;
     case "sondaggio": {
       const opzioni = (Array.isArray(par["opzioni"]) ? par["opzioni"] : []).map(String).slice(0, 12);
       await richiesta(ctx.openwa, "POST", "/messages/send-poll", {
