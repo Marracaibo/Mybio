@@ -576,8 +576,8 @@ export async function scaricaAllegato(openwa: ConfigOpenWA, chat: string, messag
 const ISTRUZIONI_MODO: Record<Modo, string> = {
   normale: "",
   cliente: `
-MODALITÀ RICERCA CLIENTE: prepari un dossier su un'azienda (o un progetto) prima di un contatto commerciale di Roberto,
-il Sales Manager. Metodo: 1) sito ufficiale, cosa fanno, dimensioni, mercato e notizie degli ultimi 6 mesi;
+MODALITÀ RICERCA CLIENTE: prepari un dossier su un'azienda (o un progetto) prima di un contatto commerciale del
+Sales Manager del team. Metodo: 1) sito ufficiale, cosa fanno, dimensioni, mercato e notizie degli ultimi 6 mesi;
 2) presenza su Telegram (canali e gruppi t.me, iscritti se pubblici), Discord e altre community; 3) persone da contattare,
 solo con ruolo professionale e da fonti pubbliche (sito, LinkedIn, stampa), MAI dati personali privati come numeri
 personali, indirizzi di casa o familiari; 4) collega i loro problemi ai prodotti veri di Doublegram.

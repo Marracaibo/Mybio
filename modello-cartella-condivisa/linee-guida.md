@@ -1,4 +1,4 @@
-# Linee guida – profilo LinkedIn di Roberto Rainoni (Doublegram)
+# Linee guida – profilo LinkedIn [Nome Cognome] (Doublegram)
 
 Questo file viene letto a ogni esecuzione di `npm run adatta` ed è l'UNICA fonte di fatti
 che il sistema può usare. Tutto ciò che non è scritto qui non può comparire in un post:
@@ -8,7 +8,7 @@ al suo posto il sistema scrive [DATO DA INSERIRE].
 
 ## 1. Chi è il profilo
 
-- Nome e cognome: Roberto Rainoni
+- Nome e cognome: [Nome Cognome] (lo stesso di PROFILO_NOME nel .env)
 - Ruolo: Sales Manager di Doublegram
 - Cosa fa ogni giorno: è il Sales Manager di Doublegram; parla con admin e owner di community Telegram
   che valutano strumenti per gestire e far crescere la propria community.
@@ -67,5 +67,5 @@ finché non vengono aggiunti qui, il sistema non li usa e scrive [DATO DA INSERI
 
 ## 7. Esempi di post approvati
 
-Ancora nessuno. Quando Roberto avrà pubblicato o approvato 2-3 post, incollali qui:
+Ancora nessuno. Quando il profilo avrà pubblicato o approvato 2-3 post, incollali qui:
 servono come riferimento di tono e lunghezza.

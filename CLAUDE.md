@@ -1,11 +1,11 @@
-# doublegram-linkedin-engine — guida per Claude
+# Progetto WhatsApp DG — guida per Claude
 
 Motore di Doublegram su WhatsApp. Gira su un VPS (Ubuntu, Docker) collegato a WhatsApp tramite OpenWA, e lavora
 solo nel gruppo WhatsApp "Doublegram" del team. Tutto in italiano: codice, commenti, log, messaggi, commit.
 
 ## Cosa fa
 1. **Bozze LinkedIn**: adatta in italiano post e newsletter in inglese (RSS, screenshot, testo o link mandati nel
-   gruppo con "adatta") e manda le bozze nel gruppo per Roberto Rainoni (Sales Manager di Doublegram). Al massimo 3
+   gruppo con "adatta") e manda le bozze nel gruppo per il profilo configurato (`PROFILO_NOME`, il Sales Manager di Doublegram). Al massimo 3
    bozze al giorno; "adatta subito" e "manda bozza" scavalcano il limite. Pipeline: `rss.ts` → `adatta.ts`
    (`pipeline.ts`, `prompts.ts`, `schemi.ts`) → `invia.ts`; i comandi del gruppo sono in `comandi.ts`.
 2. **Bot Doublegram adattati a WhatsApp** (`doublegram.ts`): /ai, /post (post per il canale Telegram con card,
@@ -23,7 +23,7 @@ solo nel gruppo WhatsApp "Doublegram" del team. Tutto in italiano: codice, comme
 message.reaction), mette in coda i lavori e gestisce gli orari di pianificazione, promemoria, briefing e monitoraggio.
 
 ## Regole da rispettare sempre
-- **Il numero WhatsApp collegato è quello PERSONALE del titolare.** I bot agiscono solo nel gruppo configurato
+- **Il numero WhatsApp collegato può essere un numero personale (oggi lo è).** I bot agiscono solo nel gruppo configurato
   (`WHATSAPP_GROUP_ID`). Mai messaggi privati a terzi, mai invii di massa, mai pubblicare negli stati, mai rispondere
   alle chiamate. Con il numero personale i propri messaggi arrivano come `message.sent`: le eco del motore vanno
   ignorate (`inviatoDaQui`, `idInviatoDaQui`) e le citazioni si leggono dallo storico (`citazioneDaStorico`).
@@ -65,7 +65,7 @@ message.reaction), mette in coda i lavori e gestisce gli orari di pianificazione
   (`X-OpenWA-Signature: sha256=…`) su `/webhook/openwa`. Vedi gli esempi nella cronologia del progetto.
 
 ## Stato (ottobre 2026)
-- In produzione e provati dal titolare: bozze LinkedIn, "adatta" con screenshot, Scribe, /ai, /post.
+- In produzione e provati dal team: bozze LinkedIn, "adatta" con screenshot, Scribe, /ai, /post.
 - Provati con Claude vero su gruppo simulato, da provare sul server: voce, briefing, /cliente, dati simulati,
   avanzamento in diretta, approvazioni, file PowerPoint, memoria, monitoraggio, quiz, sticker, ricerca web.
 - Da riprovare: il PDF della ricerca approfondita. La correzione con `container_upload` non è ancora stata

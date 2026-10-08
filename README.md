@@ -1,4 +1,9 @@
-# doublegram-linkedin-engine
+# Progetto WhatsApp DG
+
+Motore di Doublegram su WhatsApp: bozze LinkedIn, bot Doublegram adattati a WhatsApp e Jarvis, il maggiordomo
+del gruppo. (Nome interno del pacchetto e del progetto Docker: `doublegram-linkedin-engine` / `doublegram-linkedin`.)
+
+## Bozze LinkedIn
 
 Prende post LinkedIn in inglese che hanno performato bene, li **adatta** (non li traduce) in italiano
 per il profilo sales di Doublegram e ogni mattina manda una bozza su un gruppo WhatsApp.
@@ -256,11 +261,11 @@ Nessuna porta è pubblica: la dashboard di OpenWA si apre con un tunnel SSH.
 
 ### Installazione automatica (consigliata)
 
-Su un VPS nuovo con Ubuntu 24.04 o 26.04 (es. OVHcloud VPS-1, 2 vCore / 4 GB), collegati con
+Su un VPS nuovo con Ubuntu 24.04 o 26.04 (es. un VPS da 2 vCore / 4 GB), collegati con
 `ssh ubuntu@<ip-del-server>` e lancia:
 
 ```bash
-git clone https://github.com/Marracaibo/Mybio.git doublegram-linkedin-engine
+git clone <URL-del-repository> doublegram-linkedin-engine
 cd doublegram-linkedin-engine
 sudo bash deploy/installa.sh
 ```
