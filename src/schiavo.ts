@@ -722,12 +722,16 @@ export async function chiediSchiavo(
       });
     }
     risposta = await flusso.finalMessage();
+    // Errori degli strumenti lato server (ricerca, pagine, esecuzione di codice della ricerca "dinamica"):
+    // non fanno fallire la chiamata, arrivano dentro i blocchi. Li metto nei log.
     for (const blocco of risposta.content) {
-      if ((blocco.type === "web_search_tool_result" || blocco.type === "web_fetch_tool_result") && !Array.isArray(blocco.content)) {
-        const errore = (blocco.content as { error_code?: string }).error_code;
-        if (errore) log.avviso(`Schiavo: ${blocco.type} errore ${errore}`);
-      }
+      if (!blocco.type.endsWith("_tool_result")) continue;
+      const c = (blocco as { content?: unknown }).content;
+      const errore = c && typeof c === "object" && !Array.isArray(c) ? (c as { error_code?: string }).error_code : undefined;
+      if (errore) log.avviso(`Schiavo: ${blocco.type} errore ${errore}`);
     }
+    const usati = risposta.content.filter((b) => b.type === "server_tool_use").map((b) => (b as { name: string }).name);
+    if (usati.length) log.info(`Schiavo: strumenti server ${usati.join(", ")} (stop: ${risposta.stop_reason})`);
     if (risposta.stop_reason === "pause_turn") {
       messaggi.push({ role: "assistant", content: risposta.content });
       continue;
