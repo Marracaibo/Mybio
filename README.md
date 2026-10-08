@@ -404,7 +404,7 @@ Con `npm run servizio` attivo, nel gruppo configurato funzionano anche le versio
 | Comando | Cosa fa |
 |---|---|
 | `/ai <domanda>` | risponde Claude (citando un messaggio, lo usa come contesto) |
-| vocali | Scribe li trascrive in automatico (serve `GROQ_API_KEY`) · `/scribe on` / `off` |
+| vocali | Scribe li trascrive in automatico con Whisper "small" sul server (servizio `scribe`, ~800 MB di RAM) · `/scribe on` / `off` |
 | `/lookup <numero>` o `/lookup @persona` | nome pubblico, foto, rubrica: utile per riconoscere i cloni |
 | `/security on` / `off` / `stato`, `/vieta <parola>`, `/consenti <parola>` | rimuove link e parole vietate scritti da chi non è admin (il numero collegato deve essere admin). Spento di default |
 | `/shop`, `/aggiungi <n>`, `/togli <n>`, `/carrello`, `/svuota`, `/ordina` | i piani veri di Doublegram, carrello e ordine con il link per attivarlo |

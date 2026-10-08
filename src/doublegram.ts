@@ -197,6 +197,19 @@ async function rispondiAI(config: Config, domanda: string, contesto?: string): P
 }
 
 async function trascrivi(config: Config, audio: Buffer, mimetype: string): Promise<string> {
+  // Scribe locale (deploy/scribe, Whisper small sul server): l'audio va così com'è, senza chiavi.
+  if (/\/trascrivi\/?$/.test(config.SCRIBE_URL)) {
+    const risposta = await fetch(config.SCRIBE_URL, {
+      method: "POST",
+      headers: { "Content-Type": mimetype || "audio/ogg" },
+      body: new Uint8Array(audio),
+      signal: AbortSignal.timeout(300_000),
+    });
+    const corpo = await risposta.text();
+    if (!risposta.ok) throw new Error(`trascrizione non riuscita (${risposta.status}): ${corpo.slice(0, 200)}`);
+    return ((JSON.parse(corpo) as { text?: string }).text ?? "").trim();
+  }
+  // Altrimenti un servizio compatibile OpenAI (es. Groq), con chiave.
   if (!config.GROQ_API_KEY) throw new Error("manca GROQ_API_KEY nel file .env");
   const estensione = mimetype.includes("ogg") ? "ogg" : mimetype.includes("mpeg") ? "mp3" : mimetype.includes("mp4") ? "m4a" : "ogg";
   const modulo = new FormData();
@@ -350,7 +363,8 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
       await rispondi(trascritto ? `🎙️ ${trascritto}` : "🎙️ (vocale senza parole riconoscibili)");
     } catch (e) {
       log.errore(`Scribe: ${descriviErrore(e)}`);
-      if (!config.GROQ_API_KEY) return true; // non configurato: niente messaggi d'errore nel gruppo
+      const locale = /\/trascrivi\/?$/.test(config.SCRIBE_URL);
+      if (!locale && !config.GROQ_API_KEY) return true; // non configurato: niente messaggi d'errore nel gruppo
       await rispondi(`🎙️ Non sono riuscito a trascrivere questo vocale (${descriviErrore(e)}).`);
     }
     return true;
@@ -437,7 +451,9 @@ export async function gestisciDoublegram(srv: ServizioDoublegram, msg: Messaggio
         salvaStato(stato);
         await rispondi(
           `🎙️ Scribe è ${stato.scribe.attiva ? "attivo: trascrivo i vocali del gruppo" : "spento"}.` +
-            (stato.scribe.attiva && !config.GROQ_API_KEY ? " ⚠️ Manca GROQ_API_KEY nel .env: per ora non posso trascrivere." : ""),
+            (stato.scribe.attiva && !/\/trascrivi\/?$/.test(config.SCRIBE_URL) && !config.GROQ_API_KEY
+              ? " ⚠️ Manca GROQ_API_KEY nel .env: per ora non posso trascrivere."
+              : ""),
         );
         return true;
       }

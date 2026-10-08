@@ -19,6 +19,8 @@ services:
       WEBHOOK_URL: http://motore:3000/webhook/openwa
       PORTA_SERVIZIO: "3000"
       PIANIFICAZIONE_INTERNA: "true"
+      # Scribe: trascrizione dei vocali con Whisper sul server (servizio scribe qui sotto).
+      SCRIBE_URL: ${SCRIBE_URL:-http://scribe:8000/trascrivi}
       TZ: ${TZ:-Europe/Rome}
     volumes:
       - ./dati/condivisa:/condivisa
@@ -26,6 +28,20 @@ services:
     networks:
       - openwa-network
     # Nessuna porta pubblica: solo OpenWA, sulla rete interna, parla con il motore.
+
+  # Scribe: Whisper "small" su CPU per i vocali del gruppo. Al primo avvio scarica il modello (~500 MB)
+  # in dati/scribe; usa circa 800 MB di RAM. Raggiungibile solo dal motore, sulla rete interna.
+  scribe:
+    build: ./scribe
+    restart: unless-stopped
+    mem_limit: 1500m
+    environment:
+      WHISPER_MODELLO: ${WHISPER_MODELLO:-small}
+      WHISPER_THREADS: "2"
+    volumes:
+      - ./dati/scribe:/modelli
+    networks:
+      - openwa-network
 
   # Solo con COMPOSE_PROFILES=drive in deploy/.env (lo imposta deploy/installa.sh se trova rclone.conf).
   rclone:
