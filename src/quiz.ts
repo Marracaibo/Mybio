@@ -168,7 +168,7 @@ export function classificaSettimana(): string {
   const voci = Object.entries(c.punti).sort((a, b) => b[1] - a[1]);
   if (!voci.length) return "🏆 Nessuna partita questa settimana. Si comincia con /quiz!";
   const medaglie = ["🥇", "🥈", "🥉"];
-  return `🏆 *Classifica della settimana* (${c.partite} partite)\n${voci.map(([id, p], i) => `${medaglie[i] ?? `${i + 1}.`} ${nomeDi(id)} – ${p} punti`).join("\n")}`;
+  return `🏆 *Classifica della settimana* (${c.partite} ${c.partite === 1 ? "partita" : "partite"})\n${voci.map(([id, p], i) => `${medaglie[i] ?? `${i + 1}.`} ${nomeDi(id)} – ${p} punti`).join("\n")}`;
 }
 
 // ---------- Partita ----------
@@ -286,7 +286,7 @@ async function giocaPartita(ctx: { config: Config; log: Logger; openwa: ConfigOp
   const medaglie = ["🥇", "🥈", "🥉"];
   await inviaImmagine(
     openwa,
-    creaCard({ etichetta: "CAMPIONE DEL QUIZ", titolo: nomeDi(primo).slice(0, 22), sottotitolo: `${punti} punti · ${p.titolo}`.slice(0, 45) }, ctx.config.SHARED_DIR),
+    creaCard({ etichetta: "CAMPIONE DEL QUIZ", titolo: nomeDi(primo).slice(0, 22), sottotitolo: `${punti} punti` }, ctx.config.SHARED_DIR),
   );
   await inviaSticker(openwa, stickerTrofeo(nomeDi(primo))).catch((e) => log.avviso(`Quiz, sticker: ${descriviErrore(e)}`));
   await inviaTesto(
